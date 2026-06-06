@@ -9,6 +9,7 @@ Serves web/index.html at / and accepts POST /triage with JSON scan input.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from flask import Flask, Response, jsonify, request, send_file
@@ -17,6 +18,7 @@ from agent.agent import triage
 from agent.schema import to_json
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024  # 1 MB request limit
 _WEB_DIR = Path(__file__).parent
 
 
@@ -45,4 +47,5 @@ def run_triage() -> Response:
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    debug = os.getenv("FLASK_DEBUG", "0") == "1"
+    app.run(debug=debug, port=5000)
