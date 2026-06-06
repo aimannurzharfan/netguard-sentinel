@@ -1,0 +1,41 @@
+# Secrets
+.env
+*.pem
+*.key
+
+# Dev-only / local tooling
+_local/
+CLAUDE.md
+.claude/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Generated threat-data cache (rebuilt by data/fetch_cache.py)
+data/cache/
+
+# Oracle wallet (never commit)
+wallet/
+Wallet_*.zip
+tnsnames.ora
+sqlnet.ora
+
+# OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
