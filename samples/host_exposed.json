@@ -1,0 +1,24 @@
+{
+  "host": "10.0.0.5",
+  "scan_time": "2026-06-06T10:00:00Z",
+  "ports": [
+    {
+      "port": 80,
+      "service": "Apache httpd",
+      "version": "2.4.49",
+      "banner": "Apache/2.4.49 (Unix)"
+    },
+    {
+      "port": 21,
+      "service": "vsftpd",
+      "version": "2.3.4",
+      "banner": "220 (vsFTPd 2.3.4)"
+    },
+    {
+      "port": 22,
+      "service": "OpenSSH",
+      "version": "7.4",
+      "banner": "SSH-2.0-OpenSSH_7.4"
+    }
+  ]
+}

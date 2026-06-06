@@ -1,0 +1,24 @@
+{
+  "host": "10.0.0.12",
+  "scan_time": "2026-06-06T10:00:00Z",
+  "ports": [
+    {
+      "port": 80,
+      "service": "nginx",
+      "version": "1.18.0",
+      "banner": "nginx/1.18.0"
+    },
+    {
+      "port": 22,
+      "service": "OpenSSH",
+      "version": "7.4",
+      "banner": "SSH-2.0-OpenSSH_7.4"
+    },
+    {
+      "port": 443,
+      "service": "OpenSSL",
+      "version": "1.0.1",
+      "banner": ""
+    }
+  ]
+}
