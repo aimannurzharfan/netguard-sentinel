@@ -19,6 +19,12 @@
       "service": "OpenSSH",
       "version": "7.4",
       "banner": "SSH-2.0-OpenSSH_7.4"
+    },
+    {
+      "port": 443,
+      "service": "OpenSSL",
+      "version": "1.0.1",
+      "banner": ""
     }
   ]
 }

@@ -33,6 +33,8 @@ CVSS contributes 30% (severity baseline). EPSS contributes 50% (real-world explo
 
 ## Architecture
 
+![Architecture](docs/architecture.png)
+
 ```
                           python -m netguard_sentinel <host>
                                          |
@@ -67,7 +69,9 @@ pip install -r requirements.txt
 cp .env.example .env
 # Set ORACLE_PASSWORD if you plan to use Layer 2.
 
-python -m data.fetch_cache      # build the NVD/EPSS/KEV cache
+# data/cache/cves.json ships committed for an offline deterministic demo.
+# Run the line below only when you want to refresh it from NVD/EPSS/KEV.
+# python -m data.fetch_cache
 pytest                          # run the test suite
 python -m web.server            # start the UI at http://localhost:5000
 ```

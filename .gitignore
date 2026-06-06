@@ -15,7 +15,7 @@ __pycache__/
 .eggs/
 build/
 dist/
-.venv/
+.venv*/
 venv/
 env/
 .pytest_cache/
@@ -26,6 +26,7 @@ htmlcov/
 
 # Generated threat-data cache (rebuilt by data/fetch_cache.py)
 data/cache/
+!data/cache/cves.json
 
 # Oracle wallet (never commit)
 wallet/

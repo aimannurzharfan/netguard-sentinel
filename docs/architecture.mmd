@@ -1,0 +1,34 @@
+flowchart TD
+    USER["User / Browser"]
+    CLI["python -m netguard_sentinel &lt;host&gt;"]
+    UI["Web UI\n(web/index.html)"]
+    SERVER["Flask server\n(web/server.py)"]
+    SCANNER["scanner/scan.py\nTCP connect · banner grab\nservice fingerprint"]
+
+    subgraph FOUNDRY["Microsoft Foundry"]
+        AGENT["agent/agent.py\n6-step triage pipeline\n1 Intake  2 Enrich  3 Score\n4 Rank  5 Attack-path  6 Remediate"]
+    end
+
+    TOOL["threat_intel_lookup(service)\ntools/threat_intel.py"]
+
+    subgraph L1["Layer 1 — local cache"]
+        CACHE["data/cache/cves.json\nNVD · EPSS · CISA KEV"]
+    end
+
+    subgraph L2["Layer 2 — Oracle 23ai"]
+        ORACLE["Oracle 23ai\nAI Vector Search\n(THREAT_BACKEND=oracle)"]
+    end
+
+    RESULT["TriageResult JSON\nFindings ranked worst-first\nMITRE ATT&CK · Remediation"]
+
+    USER -->|"click Scan"| UI
+    CLI -->|scan + triage| SCANNER
+    UI -->|"POST /scan"| SERVER
+    SERVER --> SCANNER
+    SCANNER -->|scan JSON| AGENT
+    AGENT -->|calls tool| TOOL
+    TOOL -->|cache backend| CACHE
+    TOOL -->|oracle backend| ORACLE
+    AGENT --> RESULT
+    RESULT -->|rendered| UI
+    RESULT -->|stdout| CLI
