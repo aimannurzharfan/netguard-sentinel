@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self';" />
+  <title>NetGuard Sentinel</title>
+  <style>
+    /* ------------------------------------------------------------------ */
+    /* Design tokens                                                        */
+    /* ------------------------------------------------------------------ */
+    :root {
+      --bg:          #0f172a;
+      --surface:     #1e293b;
+      --surface-2:   #293548;
+      --border:      #334155;
+      --text:        #f1f5f9;
+      --text-muted:  #94a3b8;
+      --accent:      #38bdf8;
+      --focus-ring:  #7dd3fc;
+
+      /* Severity -- all meet WCAG AA (4.5:1) against --surface */
+      --critical-bg: #7f1d1d;
+      --critical-fg: #fecaca;
+      --high-bg:     #7c2d12;
+      --high-fg:     #fed7aa;
+      --medium-bg:   #713f12;
+      --medium-fg:   #fef08a;
+      --low-bg:      #14532d;
+      --low-fg:      #bbf7d0;
+      --info-bg:     #1e3a5f;
+      --info-fg:     #bae6fd;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Reset and base                                                       */
+    /* ------------------------------------------------------------------ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: ui-monospace, "Cascadia Code", "Fira Code", monospace;
+      font-size: 0.9rem;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* Skip-to-main link for keyboard/screen-reader users */
+    .skip-link {
+      position: absolute;
+      top: -999px;
+      left: 0;
+      background: var(--accent);
+      color: var(--bg);
+      padding: 0.5rem 1rem;
+      font-weight: 700;
+      z-index: 100;
+    }
+    .skip-link:focus { top: 0; }
+
+    /* ------------------------------------------------------------------ */
+    /* Layout                                                               */
+    /* ------------------------------------------------------------------ */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    header h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+    }
+
+    header .subtitle {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.5rem;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Input panel                                                          */
+    /* ------------------------------------------------------------------ */
+    .input-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 1.25rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .input-panel label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    textarea {
+      width: 100%;
+      height: 180px;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 0.375rem;
+      padding: 0.75rem;
+      font-family: inherit;
+      font-size: 0.85rem;
+      resize: vertical;
+    }
+
+    textarea:focus {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 2px;
+    }
+
+    .input-actions {
+      margin-top: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    button {
+      background: var(--accent);
+      color: var(--bg);
+      border: none;
+      border-radius: 0.375rem;
+      padding: 0.5rem 1.25rem;
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+
+    button:hover { opacity: 0.88; }
+    button:focus { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-secondary {
+      background: var(--surface-2);
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+
+    .status-msg {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      min-height: 1.2em;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Results                                                              */
+    /* ------------------------------------------------------------------ */
+    #results { display: none; }
+    #results.visible { display: block; }
+
+    .host-header {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    .host-header h2 {
+      font-size: 1rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .risk-bar-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-top: 0.5rem;
+    }
+
+    .risk-bar-track {
+      flex: 1;
+      height: 8px;
+      background: var(--surface-2);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .risk-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: linear-gradient(90deg, #22c55e 0%, #eab308 50%, #ef4444 100%);
+      transition: width 0.6s ease;
+    }
+
+    .risk-score-label {
+      font-size: 1.25rem;
+      font-weight: 700;
+      min-width: 3ch;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Finding cards                                                        */
+    /* ------------------------------------------------------------------ */
+    .findings-section h3,
+    .attack-path-section h3 {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+    }
+
+    .finding-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 1rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .finding-card:focus-within {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 2px;
+    }
+
+    .finding-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.5rem;
+    }
+
+    .priority-badge {
+      background: var(--surface-2);
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 0.1rem 0.4rem;
+      border-radius: 0.25rem;
+    }
+
+    .severity-badge {
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 0.15rem 0.5rem;
+      border-radius: 0.25rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .severity-critical { background: var(--critical-bg); color: var(--critical-fg); }
+    .severity-high     { background: var(--high-bg);     color: var(--high-fg); }
+    .severity-medium   { background: var(--medium-bg);   color: var(--medium-fg); }
+    .severity-low      { background: var(--low-bg);      color: var(--low-fg); }
+
+    .service-name {
+      font-weight: 600;
+    }
+
+    .port-label {
+      color: var(--text-muted);
+      font-size: 0.8rem;
+    }
+
+    .cve-list {
+      list-style: none;
+      margin: 0.5rem 0;
+    }
+
+    .cve-item {
+      display: flex;
+      align-items: baseline;
+      gap: 0.5rem;
+      padding: 0.25rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .cve-item:last-child { border-bottom: none; }
+
+    .cve-id {
+      color: var(--accent);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .cve-kev {
+      font-size: 0.65rem;
+      font-weight: 700;
+      background: var(--critical-bg);
+      color: var(--critical-fg);
+      padding: 0.05rem 0.3rem;
+      border-radius: 0.2rem;
+    }
+
+    .score-pill {
+      font-size: 0.75rem;
+      background: var(--surface-2);
+      padding: 0.1rem 0.4rem;
+      border-radius: 0.2rem;
+      white-space: nowrap;
+    }
+
+    .finding-detail {
+      margin-top: 0.5rem;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+    }
+
+    .finding-remediation {
+      margin-top: 0.5rem;
+      font-size: 0.85rem;
+      padding: 0.5rem 0.75rem;
+      background: var(--surface-2);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 0.25rem 0.25rem 0;
+    }
+
+    .mitre-tags {
+      margin-top: 0.4rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+    }
+
+    .mitre-tag {
+      font-size: 0.7rem;
+      background: var(--info-bg);
+      color: var(--info-fg);
+      padding: 0.1rem 0.4rem;
+      border-radius: 0.25rem;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Attack path                                                          */
+    /* ------------------------------------------------------------------ */
+    .attack-path-section {
+      margin-top: 1.5rem;
+    }
+
+    .attack-path-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 1.25rem;
+    }
+
+    .attack-path-narrative {
+      margin-bottom: 1rem;
+      line-height: 1.7;
+    }
+
+    .attack-steps {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .attack-step {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 0.375rem;
+      padding: 0.4rem 0.75rem;
+      font-size: 0.8rem;
+      text-align: center;
+    }
+
+    .attack-step-tactic {
+      color: var(--text-muted);
+      font-size: 0.7rem;
+    }
+
+    .step-arrow {
+      color: var(--text-muted);
+      font-size: 1rem;
+    }
+
+    .break-point {
+      font-size: 0.85rem;
+      padding: 0.6rem 0.9rem;
+      background: var(--low-bg);
+      color: var(--low-fg);
+      border-radius: 0.375rem;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Error state                                                          */
+    /* ------------------------------------------------------------------ */
+    .error-card {
+      background: var(--critical-bg);
+      color: var(--critical-fg);
+      border-radius: 0.5rem;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Responsive                                                           */
+    /* ------------------------------------------------------------------ */
+    @media (max-width: 600px) {
+      header { flex-direction: column; align-items: flex-start; }
+      .attack-steps { flex-direction: column; }
+      .step-arrow { transform: rotate(90deg); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .risk-bar-fill { transition: none; }
+    }
+  </style>
+</head>
+<body>
+
+<a href="#main-content" class="skip-link">Skip to main content</a>
+
+<header role="banner">
+  <div>
+    <h1>NetGuard Sentinel</h1>
+    <div class="subtitle">Autonomous vulnerability triage on Microsoft Foundry</div>
+  </div>
+</header>
+
+<main id="main-content" role="main">
+
+  <section class="input-panel" aria-labelledby="input-heading">
+    <label id="input-heading" for="scan-input">
+      Paste NetGuard scan output (JSON)
+    </label>
+    <textarea
+      id="scan-input"
+      name="scan-input"
+      aria-describedby="input-hint"
+      placeholder='{"host": "10.0.0.5", "ports": [{"port": 80, "service": "Apache httpd", "version": "2.4.49"}]}'
+      spellcheck="false"
+    ></textarea>
+    <p id="input-hint" class="status-msg">
+      Provide scan JSON, then click Analyze.
+    </p>
+    <div class="input-actions">
+      <button id="triage-btn" type="button" aria-controls="results">
+        Analyze
+      </button>
+      <button id="sample-btn" type="button" class="btn-secondary" aria-label="Load exposed host sample scan">
+        Load sample
+      </button>
+      <button id="clear-btn" type="button" class="btn-secondary" aria-label="Clear input and results">
+        Clear
+      </button>
+    </div>
+  </section>
+
+  <section id="results" aria-live="polite" aria-label="Triage results">
+    <!-- populated by app.js -->
+  </section>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
