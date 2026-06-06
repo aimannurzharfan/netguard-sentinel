@@ -16,8 +16,12 @@ const SAMPLE_SCAN = JSON.stringify({
 
 function el(id) { return document.getElementById(id); }
 
-function setStatus(msg) {
-  el("input-hint").textContent = msg;
+function setScanStatus(msg) {
+  el("scan-hint").textContent = msg;
+}
+
+function setPasteStatus(msg) {
+  el("paste-hint").textContent = msg;
 }
 
 function severityClass(s) {
@@ -125,9 +129,7 @@ function renderAttackPath(ap) {
 }
 
 function renderResult(data) {
-  // riskScore is a server-computed integer (0-100); run through safeNum before HTML insertion.
   const riskScore = Math.min(100, Math.max(0, safeNum(data.host_risk_score)));
-  // riskColor is chosen from a fixed set of CSS variable references -- no user data.
   const riskColor = riskScore >= 80 ? "var(--critical-fg)"
                   : riskScore >= 60 ? "var(--high-fg)"
                   : riskScore >= 35 ? "var(--medium-fg)"
@@ -169,23 +171,73 @@ function showResults(data) {
   resultsEl.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+function clearResults() {
+  const resultsEl = el("results");
+  resultsEl.innerHTML = "";
+  resultsEl.classList.remove("visible");
+}
+
 // -------------------------------------------------------------------------- //
-// API call                                                                    //
+// Primary: scan flow                                                          //
+// -------------------------------------------------------------------------- //
+
+async function runScan() {
+  const host = el("host-input").value.trim();
+  if (!host) {
+    setScanStatus("Enter a target host first.");
+    el("host-input").focus();
+    return;
+  }
+
+  const btn = el("scan-btn");
+  btn.disabled = true;
+  clearResults();
+  setScanStatus(`Scanning ports on ${host} ...`);
+
+  // Update status mid-flight once the typical scan time has elapsed.
+  const progressTimer = setTimeout(() => setScanStatus("Analyzing findings ..."), 4000);
+
+  try {
+    const resp = await fetch("/scan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ host }),
+    });
+    clearTimeout(progressTimer);
+    const data = await resp.json();
+    if (!resp.ok) {
+      showError(data.error || `Server returned ${resp.status}`);
+      setScanStatus("Scan failed.");
+      return;
+    }
+    showResults(data);
+    const n = (data.findings || []).length;
+    setScanStatus(`Done. ${n} finding(s) analyzed.`);
+  } catch (err) {
+    clearTimeout(progressTimer);
+    showError(`Could not reach the server: ${err.message}`);
+    setScanStatus("Scan failed.");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// -------------------------------------------------------------------------- //
+// Secondary: paste scan JSON flow                                             //
 // -------------------------------------------------------------------------- //
 
 async function runTriage() {
   const scan = el("scan-input").value.trim();
   if (!scan) {
-    setStatus("Paste scan JSON first.");
+    setPasteStatus("Paste scan JSON first.");
     el("scan-input").focus();
     return;
   }
 
   const btn = el("triage-btn");
   btn.disabled = true;
-  setStatus("Analyzing...");
-  el("results").classList.remove("visible");
-  el("results").innerHTML = "";
+  clearResults();
+  setPasteStatus("Analyzing ...");
 
   try {
     const resp = await fetch("/triage", {
@@ -196,14 +248,14 @@ async function runTriage() {
     const data = await resp.json();
     if (!resp.ok) {
       showError(data.error || `Server returned ${resp.status}`);
-      setStatus("Analysis failed.");
+      setPasteStatus("Analysis failed.");
       return;
     }
     showResults(data);
-    setStatus(`Done. ${data.findings.length} finding(s) analyzed.`);
+    setPasteStatus(`Done. ${data.findings.length} finding(s) analyzed.`);
   } catch (err) {
     showError(`Could not reach the server: ${err.message}`);
-    setStatus("Analysis failed.");
+    setPasteStatus("Analysis failed.");
   } finally {
     btn.disabled = false;
   }
@@ -212,6 +264,15 @@ async function runTriage() {
 // -------------------------------------------------------------------------- //
 // Event wiring                                                                //
 // -------------------------------------------------------------------------- //
+
+el("scan-btn").addEventListener("click", runScan);
+
+el("host-input").addEventListener("keydown", e => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    runScan();
+  }
+});
 
 el("triage-btn").addEventListener("click", runTriage);
 
@@ -224,14 +285,13 @@ el("scan-input").addEventListener("keydown", e => {
 
 el("sample-btn").addEventListener("click", () => {
   el("scan-input").value = SAMPLE_SCAN;
-  setStatus("Sample scan loaded. Click Analyze to run.");
+  setPasteStatus("Sample scan loaded. Click Analyze to run.");
   el("scan-input").focus();
 });
 
 el("clear-btn").addEventListener("click", () => {
   el("scan-input").value = "";
-  el("results").innerHTML = "";
-  el("results").classList.remove("visible");
-  setStatus("Provide scan JSON, then click Analyze.");
+  clearResults();
+  setPasteStatus("Paste scan JSON, then click Analyze.");
   el("scan-input").focus();
 });

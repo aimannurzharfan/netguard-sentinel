@@ -60,6 +60,19 @@
     }
     .skip-link:focus { top: 0; }
 
+    /* Visually hidden but available to screen readers */
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0,0,0,0);
+      white-space: nowrap;
+      border-width: 0;
+    }
+
     /* ------------------------------------------------------------------ */
     /* Layout                                                               */
     /* ------------------------------------------------------------------ */
@@ -90,25 +103,110 @@
     }
 
     /* ------------------------------------------------------------------ */
-    /* Input panel                                                          */
+    /* Primary scan panel                                                   */
     /* ------------------------------------------------------------------ */
-    .input-panel {
+    .scan-panel {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 0.5rem;
       padding: 1.25rem;
-      margin-bottom: 1.5rem;
+      margin-bottom: 1rem;
     }
 
-    .input-panel label {
+    .auth-notice {
+      font-size: 0.78rem;
+      color: var(--medium-fg);
+      background: var(--medium-bg);
+      border-radius: 0.25rem;
+      padding: 0.35rem 0.65rem;
+      margin-bottom: 1rem;
+    }
+
+    .host-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .host-label {
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .host-field {
+      flex: 1;
+      min-width: 180px;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 0.375rem;
+      padding: 0.5rem 0.75rem;
+      font-family: inherit;
+      font-size: 0.9rem;
+    }
+
+    .host-field:focus {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 2px;
+    }
+
+    .status-msg {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      min-height: 1.2em;
+      margin-top: 0.6rem;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Secondary: paste JSON (details/summary collapse)                    */
+    /* ------------------------------------------------------------------ */
+    .advanced-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      margin-bottom: 1.5rem;
+      overflow: hidden;
+    }
+
+    .advanced-summary {
+      padding: 0.75rem 1.25rem;
+      cursor: pointer;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      list-style: none;
+      user-select: none;
+    }
+
+    .advanced-summary::-webkit-details-marker { display: none; }
+
+    .advanced-summary::before {
+      content: "▶ ";
+      font-size: 0.65rem;
+      margin-right: 0.25rem;
+    }
+
+    details[open] .advanced-summary::before { content: "▼ "; }
+
+    .advanced-summary:focus {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: -2px;
+    }
+
+    .advanced-inner {
+      padding: 0 1.25rem 1.25rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .advanced-label {
       display: block;
       font-weight: 600;
-      margin-bottom: 0.5rem;
+      margin: 0.75rem 0 0.4rem;
     }
 
-    textarea {
+    .scan-textarea {
       width: 100%;
-      height: 180px;
+      height: 160px;
       background: var(--bg);
       color: var(--text);
       border: 1px solid var(--border);
@@ -119,12 +217,12 @@
       resize: vertical;
     }
 
-    textarea:focus {
+    .scan-textarea:focus {
       outline: 2px solid var(--focus-ring);
       outline-offset: 2px;
     }
 
-    .input-actions {
+    .advanced-actions {
       margin-top: 0.75rem;
       display: flex;
       align-items: center;
@@ -132,6 +230,9 @@
       flex-wrap: wrap;
     }
 
+    /* ------------------------------------------------------------------ */
+    /* Buttons                                                              */
+    /* ------------------------------------------------------------------ */
     button {
       background: var(--accent);
       color: var(--bg);
@@ -153,12 +254,6 @@
       background: var(--surface-2);
       color: var(--text-muted);
       font-weight: 400;
-    }
-
-    .status-msg {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      min-height: 1.2em;
     }
 
     /* ------------------------------------------------------------------ */
@@ -264,9 +359,7 @@
     .severity-medium   { background: var(--medium-bg);   color: var(--medium-fg); }
     .severity-low      { background: var(--low-bg);      color: var(--low-fg); }
 
-    .service-name {
-      font-weight: 600;
-    }
+    .service-name { font-weight: 600; }
 
     .port-label {
       color: var(--text-muted);
@@ -344,9 +437,7 @@
     /* ------------------------------------------------------------------ */
     /* Attack path                                                          */
     /* ------------------------------------------------------------------ */
-    .attack-path-section {
-      margin-top: 1.5rem;
-    }
+    .attack-path-section { margin-top: 1.5rem; }
 
     .attack-path-card {
       background: var(--surface);
@@ -411,6 +502,8 @@
     /* ------------------------------------------------------------------ */
     @media (max-width: 600px) {
       header { flex-direction: column; align-items: flex-start; }
+      .host-row { flex-direction: column; align-items: stretch; }
+      .host-row button { width: 100%; }
       .attack-steps { flex-direction: column; }
       .step-arrow { transform: rotate(90deg); }
     }
@@ -433,34 +526,69 @@
 
 <main id="main-content" role="main">
 
-  <section class="input-panel" aria-labelledby="input-heading">
-    <label id="input-heading" for="scan-input">
-      Paste NetGuard scan output (JSON)
-    </label>
-    <textarea
-      id="scan-input"
-      name="scan-input"
-      aria-describedby="input-hint"
-      placeholder='{"host": "10.0.0.5", "ports": [{"port": 80, "service": "Apache httpd", "version": "2.4.49"}]}'
-      spellcheck="false"
-    ></textarea>
-    <p id="input-hint" class="status-msg">
-      Provide scan JSON, then click Analyze.
+  <!-- Primary: one-click scan flow -->
+  <section class="scan-panel" aria-labelledby="scan-heading">
+    <h2 id="scan-heading" class="sr-only">Scan a target host</h2>
+    <p class="auth-notice" role="note">
+      Authorized use only. Only scan hosts you own or are explicitly authorized to test.
     </p>
-    <div class="input-actions">
-      <button id="triage-btn" type="button" aria-controls="results">
-        Analyze
-      </button>
-      <button id="sample-btn" type="button" class="btn-secondary" aria-label="Load exposed host sample scan">
-        Load sample
-      </button>
-      <button id="clear-btn" type="button" class="btn-secondary" aria-label="Clear input and results">
-        Clear
+    <div class="host-row">
+      <label for="host-input" class="host-label">Target host</label>
+      <input
+        type="text"
+        id="host-input"
+        name="host-input"
+        class="host-field"
+        value="127.0.0.1"
+        placeholder="127.0.0.1 or hostname"
+        aria-describedby="scan-hint"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <button id="scan-btn" type="button" aria-controls="results">
+        Scan
       </button>
     </div>
+    <p id="scan-hint" class="status-msg" aria-live="polite">
+      Enter a host and click Scan.
+    </p>
   </section>
 
-  <section id="results" aria-live="polite" aria-label="Triage results">
+  <!-- Secondary: paste scan JSON (advanced / offline demo) -->
+  <details class="advanced-panel">
+    <summary class="advanced-summary">
+      Paste scan JSON (advanced / offline demo)
+    </summary>
+    <div class="advanced-inner">
+      <label for="scan-input" class="advanced-label">
+        Scan JSON
+      </label>
+      <textarea
+        id="scan-input"
+        name="scan-input"
+        class="scan-textarea"
+        aria-describedby="paste-hint"
+        placeholder='{"host": "10.0.0.5", "ports": [{"port": 80, "service": "Apache httpd", "version": "2.4.49"}]}'
+        spellcheck="false"
+      ></textarea>
+      <p id="paste-hint" class="status-msg" aria-live="polite">
+        Paste scan JSON, then click Analyze.
+      </p>
+      <div class="advanced-actions">
+        <button id="triage-btn" type="button" aria-controls="results">
+          Analyze
+        </button>
+        <button id="sample-btn" type="button" class="btn-secondary" aria-label="Load exposed host sample scan">
+          Load sample
+        </button>
+        <button id="clear-btn" type="button" class="btn-secondary" aria-label="Clear input and results">
+          Clear
+        </button>
+      </div>
+    </div>
+  </details>
+
+  <section id="results" aria-label="Triage results">
     <!-- populated by app.js -->
   </section>
 
