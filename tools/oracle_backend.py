@@ -32,11 +32,15 @@ FETCH FIRST :2 ROWS ONLY
 
 
 def _connect() -> oracledb.Connection:
-    return oracledb.connect(
-        user=os.environ["ORACLE_USER"],
-        password=os.environ["ORACLE_PASSWORD"],
-        dsn=os.environ.get("ORACLE_DSN", "localhost:1521/FREEPDB1"),
-    )
+    user = os.getenv("ORACLE_USER", "system")
+    password = os.getenv("ORACLE_PASSWORD")
+    if not password:
+        raise RuntimeError(
+            "ORACLE_PASSWORD is not set. Add it to your .env file:\n"
+            "  ORACLE_PASSWORD=<password you set when starting the container>"
+        )
+    dsn = os.getenv("ORACLE_DSN", "localhost:1521/FREEPDB1")
+    return oracledb.connect(user=user, password=password, dsn=dsn)
 
 
 def lookup(service: str, top_k: int = TOP_K) -> list[dict]:

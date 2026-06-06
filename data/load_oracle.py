@@ -51,11 +51,15 @@ WHEN NOT MATCHED THEN INSERT
 
 
 def _connect() -> oracledb.Connection:
-    return oracledb.connect(
-        user=os.environ["ORACLE_USER"],
-        password=os.environ["ORACLE_PASSWORD"],
-        dsn=os.environ.get("ORACLE_DSN", "localhost:1521/FREEPDB1"),
-    )
+    user = os.getenv("ORACLE_USER", "system")
+    password = os.getenv("ORACLE_PASSWORD")
+    if not password:
+        raise RuntimeError(
+            "ORACLE_PASSWORD is not set. Add it to your .env file:\n"
+            "  ORACLE_PASSWORD=<password you set when starting the container>"
+        )
+    dsn = os.getenv("ORACLE_DSN", "localhost:1521/FREEPDB1")
+    return oracledb.connect(user=user, password=password, dsn=dsn)
 
 
 def _to_vector(floats: list[float]) -> array.array:
@@ -94,9 +98,12 @@ def load() -> None:
             },
         )
     con.commit()
+    cur.execute("SELECT COUNT(*) FROM cve_knowledge")
+    row = cur.fetchone()
+    total = row[0] if row else 0
     cur.close()
     con.close()
-    print(f"Loaded {len(records)} CVE records into cve_knowledge.")
+    print(f"cve_knowledge now contains {total} row(s).")
 
 
 if __name__ == "__main__":

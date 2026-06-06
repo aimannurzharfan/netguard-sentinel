@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 
 _CACHE_FILE = Path(__file__).parent.parent / "data" / "cache" / "cves.json"
@@ -70,7 +71,10 @@ def threat_intel_lookup(service: str) -> list[dict]:
     if backend == "oracle":
         try:
             return _oracle_lookup(service)
-        except Exception:
-            # Fall back to cache if Oracle is unavailable
+        except Exception as exc:
+            print(
+                f"[netguard] Oracle lookup failed, falling back to cache: {exc}",
+                file=sys.stderr,
+            )
             return _cache_lookup(service)
     return _cache_lookup(service)
