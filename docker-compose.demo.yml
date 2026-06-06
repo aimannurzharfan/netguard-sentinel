@@ -1,0 +1,19 @@
+# Deliberately old services for local vulnerability scanning demos.
+# These containers are intentionally vulnerable. Run on your own machine only.
+# Do not expose these ports outside localhost.
+#
+# Authorized use: local testing on machines you control.
+#
+# Usage:
+#   docker compose -f docker-compose.demo.yml up -d
+#
+# Then open the NetGuard Sentinel UI, leave the host as 127.0.0.1, and click Scan.
+# The scanner finds Apache 2.4.49 on port 8080 and triage ranks CVE-2021-41773
+# (CISA KEV, EPSS ~0.97) as priority 1.
+
+services:
+  apache249:
+    image: httpd:2.4.49
+    ports:
+      - "127.0.0.1:8080:80"
+    restart: "no"

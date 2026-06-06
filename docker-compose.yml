@@ -5,7 +5,7 @@ services:
     environment:
       ORACLE_PASSWORD: "${ORACLE_PASSWORD}"
     ports:
-      - "1521:1521"
+      - "127.0.0.1:1521:1521"
     volumes:
       - oracle23ai-data:/opt/oracle/oradata
     healthcheck:
