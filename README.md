@@ -6,7 +6,7 @@ Enter a host. One click. Get back: every open service fingerprinted, each CVE sc
 
 The demo case is Apache 2.4.49 (CVE-2021-41773, on CISA's Known Exploited Vulnerabilities list, EPSS ~0.97) ranking above higher-CVSS bugs that nobody is actively exploiting. Run it locally in two commands.
 
-This project grew out of [NetGuard](https://github.com/aimannurzharfan), a Python port scanner written earlier as a learning project. That scanner found what was running; Sentinel decides what to do about it, with the scan step built in.
+This project grew out of [NetGuard](https://github.com/aimannurzharfan/Network-Scanner), a Python port scanner written earlier as a learning project. That scanner found what was running; Sentinel decides what to do about it, with the scan step built in.
 
 **Authorized use only. Only scan hosts you own or are explicitly authorized to test.**
 
