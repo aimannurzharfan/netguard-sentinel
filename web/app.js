@@ -17,7 +17,17 @@ const SAMPLE_SCAN = JSON.stringify({
 function el(id) { return document.getElementById(id); }
 
 function setScanStatus(msg) {
-  el("scan-hint").textContent = msg;
+  const log = el("scan-log");
+  // Append a new line for each stage update so the user sees the progression.
+  const p = document.createElement("p");
+  p.className = "status-log-entry";
+  p.textContent = msg;
+  log.appendChild(p);
+}
+
+function clearScanLog() {
+  const log = el("scan-log");
+  log.innerHTML = "";
 }
 
 function setPasteStatus(msg) {
@@ -80,6 +90,15 @@ function renderMitre(mitre) {
   return `<div class="mitre-tags" aria-label="MITRE ATT&CK techniques">${tags}</div>`;
 }
 
+function renderRemediationCommand(cmd) {
+  if (!cmd) return "";
+  return `
+    <div class="remediation-cmd" role="note" aria-label="Copy-paste remediation command">
+      <span class="remediation-cmd-label">Command</span>
+      <code class="remediation-cmd-code" title="Click to select">${escHtml(cmd)}</code>
+    </div>`;
+}
+
 function renderFinding(f) {
   const sevClass = severityClass(f.contextual_severity);
   const port     = safeNum(f.port);
@@ -98,6 +117,7 @@ function renderFinding(f) {
       <div class="finding-remediation" role="note" aria-label="Recommended remediation">
         ${escHtml(f.remediation)}
       </div>
+      ${renderRemediationCommand(f.remediation_command)}
     </article>`;
 }
 
@@ -234,10 +254,17 @@ async function runScan() {
   const btn = el("scan-btn");
   btn.disabled = true;
   clearResults();
-  setScanStatus(`Scanning ports on ${host} ...`);
+  clearScanLog();
+  setScanStatus(`Scanning ports and grabbing banners on ${host}...`);
 
-  // Update status mid-flight once the typical scan time has elapsed.
-  const progressTimer = setTimeout(() => setScanStatus("Analyzing findings ..."), 4000);
+  // Staged progress messages that reflect the real pipeline steps.
+  const stageTimers = [
+    setTimeout(() => setScanStatus("Enriching findings via threat intel..."),   3000),
+    setTimeout(() => setScanStatus("Scoring and mapping MITRE ATT&CK..."), 6000),
+    setTimeout(() => setScanStatus("Ranking and writing remediation..."),        8000),
+  ];
+
+  function cancelStages() { stageTimers.forEach(clearTimeout); }
 
   try {
     const resp = await fetch("/scan", {
@@ -245,7 +272,7 @@ async function runScan() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ host }),
     });
-    clearTimeout(progressTimer);
+    cancelStages();
     const data = await resp.json();
     if (!resp.ok) {
       showError(data.error || `Server returned ${resp.status}`);
@@ -254,9 +281,12 @@ async function runScan() {
     }
     showResults(data);
     const n = (data.findings || []).length;
-    setScanStatus(`Done. ${n} finding(s) analyzed.`);
+    const backendLabel = data.threat_backend === "oracle"
+      ? "Oracle 23ai Vector DB"
+      : "local threat cache";
+    setScanStatus(`Done. ${n} finding(s) analyzed via ${backendLabel}.`);
   } catch (err) {
-    clearTimeout(progressTimer);
+    cancelStages();
     showError(`Could not reach the server: ${err.message}`);
     setScanStatus("Scan failed.");
   } finally {
@@ -279,7 +309,14 @@ async function runTriage() {
   const btn = el("triage-btn");
   btn.disabled = true;
   clearResults();
-  setPasteStatus("Analyzing ...");
+  setPasteStatus("Enriching findings via threat intel...");
+
+  const stageTimers = [
+    setTimeout(() => setPasteStatus("Scoring and mapping MITRE ATT&CK..."), 1000),
+    setTimeout(() => setPasteStatus("Ranking and writing remediation..."),       2000),
+  ];
+
+  function cancelStages() { stageTimers.forEach(clearTimeout); }
 
   try {
     const resp = await fetch("/triage", {
@@ -287,6 +324,7 @@ async function runTriage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ scan }),
     });
+    cancelStages();
     const data = await resp.json();
     if (!resp.ok) {
       showError(data.error || `Server returned ${resp.status}`);
@@ -294,8 +332,13 @@ async function runTriage() {
       return;
     }
     showResults(data);
-    setPasteStatus(`Done. ${data.findings.length} finding(s) analyzed.`);
+    const n = (data.findings || []).length;
+    const backendLabel = data.threat_backend === "oracle"
+      ? "Oracle 23ai Vector DB"
+      : "local threat cache";
+    setPasteStatus(`Done. ${n} finding(s) analyzed via ${backendLabel}.`);
   } catch (err) {
+    cancelStages();
     showError(`Could not reach the server: ${err.message}`);
     setPasteStatus("Analysis failed.");
   } finally {

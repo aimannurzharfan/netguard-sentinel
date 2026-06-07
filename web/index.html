@@ -584,6 +584,53 @@
       white-space: nowrap;
       flex-shrink: 0;
     }
+    /* ------------------------------------------------------------------ */
+    /* Remediation command block                                            */
+    /* ------------------------------------------------------------------ */
+    .remediation-cmd {
+      margin-top: 0.4rem;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+    }
+
+    .remediation-cmd-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      white-space: nowrap;
+      padding-top: 0.25rem;
+      flex-shrink: 0;
+    }
+
+    .remediation-cmd-code {
+      background: var(--bg);
+      color: var(--accent);
+      padding: 0.25rem 0.55rem;
+      border-radius: 0.25rem;
+      font-family: inherit;
+      font-size: 0.82rem;
+      word-break: break-all;
+      cursor: text;
+      user-select: all;
+      flex: 1;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Status log                                                           */
+    /* ------------------------------------------------------------------ */
+    .status-log {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      min-height: 1.2em;
+      margin-top: 0.6rem;
+    }
+
+    .status-log-entry {
+      margin: 0;
+    }
   </style>
 </head>
 <body>
@@ -614,7 +661,7 @@
         class="host-field"
         value="127.0.0.1"
         placeholder="127.0.0.1 or hostname"
-        aria-describedby="scan-hint"
+        aria-describedby="scan-log"
         autocomplete="off"
         spellcheck="false"
       />
@@ -622,9 +669,9 @@
         Scan
       </button>
     </div>
-    <p id="scan-hint" class="status-msg" aria-live="polite">
-      Enter a host and click Scan.
-    </p>
+    <div id="scan-log" class="status-log" aria-live="polite" aria-atomic="false">
+      <p class="status-log-entry">Enter a host and click Scan.</p>
+    </div>
   </section>
 
   <!-- Secondary: paste scan JSON (advanced / offline demo) -->
