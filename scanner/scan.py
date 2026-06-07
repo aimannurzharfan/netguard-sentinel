@@ -14,11 +14,36 @@ from __future__ import annotations
 
 import concurrent.futures
 import datetime
+import ipaddress
 import json
 import re
 import socket
 import sys
 from pathlib import Path
+
+# RFC1918 and loopback address ranges used for exposure classification.
+_INTERNAL_NETWORKS: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] = (
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("fc00::/7"),
+    ipaddress.ip_network("::1/128"),
+)
+
+
+def _classify_exposure(host: str) -> str | None:
+    """Return 'internal' for RFC1918/loopback, 'internet' for public IPs.
+
+    Returns None for hostnames (cannot classify without a DNS lookup and
+    we never guess).
+    """
+    try:
+        addr = ipaddress.ip_address(host)
+        return "internal" if any(addr in net for net in _INTERNAL_NETWORKS) else "internet"
+    except ValueError:
+        return None
+
 
 CONNECT_TIMEOUT = 2.0
 BANNER_TIMEOUT = 2.0
@@ -138,11 +163,15 @@ def scan(host: str, ports: list[int] | None = None) -> dict:
             except Exception:
                 pass
     open_ports.sort(key=lambda p: p["port"])
-    return {
+    result: dict = {
         "host":      host,
         "scan_time": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "ports":     open_ports,
     }
+    exposure = _classify_exposure(host)
+    if exposure is not None:
+        result["exposure"] = exposure
+    return result
 
 
 if __name__ == "__main__":
