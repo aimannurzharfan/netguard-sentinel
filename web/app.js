@@ -108,8 +108,8 @@ function renderFinding(f) {
       <div class="finding-header">
         <span class="priority-badge" aria-label="Priority ${priority}">#${priority}</span>
         <span class="severity-badge ${sevClass}" role="img" aria-label="Severity ${escHtml(f.contextual_severity)}">${escHtml(f.contextual_severity)}</span>
-        <span class="service-name">${escHtml(f.service)}</span>
-        <span class="port-label">port ${port} &middot; ${escHtml(f.version)}</span>
+        <span class="service-name">${escHtml(f.service)}<span class="port-label">:${port}</span></span>
+        <span class="port-label">${escHtml(f.version)}</span>
       </div>
       ${renderCveList(f.cves)}
       ${renderMitre(f.mitre)}
@@ -194,33 +194,42 @@ function renderResult(data) {
                   : riskScore >= 35 ? "var(--medium-fg)"
                   : "var(--low-fg)";
 
-  const findingCount = safeNum((data.findings || []).length);
-  const comparison = renderComparison(data.findings, data.naive_cvss_order);
+  const findings = data.findings || [];
+  const findingCount = findings.length;
+  const comparison = renderComparison(findings, data.naive_cvss_order);
+
+  const counts = { critical: 0, high: 0, medium: 0, low: 0 };
+  findings.forEach(f => {
+    const s = (f.contextual_severity || "").toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(counts, s)) counts[s]++;
+    else counts.low++;
+  });
+
+  const sevStrip = `
+    <div class="severity-strip" role="region" aria-label="Scan summary for ${escHtml(data.host)}">
+      <span class="strip-host">${escHtml(data.host)}</span>
+      <span class="sev-pill sev-pill-critical"><span class="sev-pill-num">${counts.critical}</span>&thinsp;Critical</span>
+      <span class="sev-pill sev-pill-high"><span class="sev-pill-num">${counts.high}</span>&thinsp;High</span>
+      <span class="sev-pill sev-pill-medium"><span class="sev-pill-num">${counts.medium}</span>&thinsp;Medium</span>
+      <span class="sev-pill sev-pill-low"><span class="sev-pill-num">${counts.low}</span>&thinsp;Low</span>
+      <span class="strip-risk" aria-label="Host risk score ${riskScore} out of 100">
+        Risk&thinsp;<span class="strip-risk-num" style="color:${riskColor}">${riskScore}</span><span aria-hidden="true" style="color:var(--text-muted);font-size:0.75rem">/100</span>
+      </span>
+      <button class="btn-new-scan" id="new-scan-btn" type="button">New scan</button>
+    </div>
+    <p class="host-summary-text">${escHtml(data.summary)}</p>`;
 
   const findingsContent = findingCount === 0
     ? `<p class="no-findings-msg">No vulnerabilities found. All scanned services appear clean.</p>`
-    : `<p class="results-intro-note">Findings ranked by composite risk (CVSS + real-world exploit probability + KEV). Priority 1 is the most urgent fix.</p>
-       <section class="findings-section" aria-label="Findings ranked by risk">
-         <h3>Findings (${findingCount}, ranked worst-first)</h3>
-         ${(data.findings || []).map(renderFinding).join("")}
+    : `<section class="findings-section" aria-label="Findings ranked by risk">
+         <h3>Findings (${findingCount})</h3>
+         ${findings.map(renderFinding).join("")}
        </section>`;
 
   return `
-    <div class="host-header" role="region" aria-labelledby="host-heading">
-      <h2 id="host-heading">${escHtml(data.host)}</h2>
-      <p style="color:var(--text-muted);font-size:0.85rem;margin-top:0.25rem">${escHtml(data.summary)}</p>
-      <div class="risk-bar-wrap" aria-label="Host risk score ${riskScore} out of 100">
-        <div class="risk-bar-track" role="progressbar" aria-valuenow="${riskScore}" aria-valuemin="0" aria-valuemax="100">
-          <div class="risk-bar-fill" style="width:${riskScore}%"></div>
-        </div>
-        <span class="risk-score-label" style="color:${riskColor}">${riskScore}</span>
-      </div>
-    </div>
-
+    ${sevStrip}
     ${comparison}
-
     ${findingsContent}
-
     ${renderAttackPath(data.attack_path)}`;
 }
 
@@ -234,6 +243,8 @@ function showResults(data) {
   const resultsEl = el("results");
   resultsEl.innerHTML = renderResult(data);
   resultsEl.classList.add("visible");
+  const scanPanel = document.querySelector(".scan-panel");
+  if (scanPanel) scanPanel.classList.add("results-active");
   resultsEl.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -241,6 +252,8 @@ function clearResults() {
   const resultsEl = el("results");
   resultsEl.innerHTML = "";
   resultsEl.classList.remove("visible");
+  const scanPanel = document.querySelector(".scan-panel");
+  if (scanPanel) scanPanel.classList.remove("results-active");
 }
 
 // -------------------------------------------------------------------------- //
@@ -389,4 +402,17 @@ el("clear-btn").addEventListener("click", () => {
   clearResults();
   setPasteStatus("Paste scan JSON, then click Analyze.");
   el("scan-input").focus();
+});
+
+// "New scan" button is rendered inside results by renderResult(); use delegation.
+function newScan() {
+  clearResults();
+  clearScanLog();
+  setScanStatus("Enter a host and click Scan.");
+  el("host-input").focus();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+el("results").addEventListener("click", e => {
+  if (e.target.closest("#new-scan-btn")) newScan();
 });

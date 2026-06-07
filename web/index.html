@@ -715,7 +715,96 @@
       .cve-item { flex-wrap: wrap; }
       .legend-row { flex-direction: column; gap: 0.15rem; }
       .legend-row dt { min-width: unset; white-space: normal; }
+      .strip-host { width: 100%; margin-right: 0; }
+      .strip-risk { margin-left: 0; }
+      .btn-new-scan { margin-left: 0; width: 100%; }
     }
+
+    /* ------------------------------------------------------------------ */
+    /* Severity summary strip (results state)                               */
+    /* ------------------------------------------------------------------ */
+    .severity-strip {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      padding: 0.75rem 1rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .strip-host {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-right: 0.35rem;
+      flex-shrink: 0;
+    }
+
+    .sev-pill {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 0.2rem;
+      padding: 0.18rem 0.5rem;
+      border-radius: 0.25rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .sev-pill-num { font-size: 0.88rem; }
+
+    .sev-pill-critical { background: var(--critical-bg); color: var(--critical-fg); }
+    .sev-pill-high     { background: var(--high-bg);     color: var(--high-fg); }
+    .sev-pill-medium   { background: var(--medium-bg);   color: var(--medium-fg); }
+    .sev-pill-low      { background: var(--low-bg);      color: var(--low-fg); }
+
+    .strip-risk {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .strip-risk-num {
+      font-size: 1.1rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .host-summary-text {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      margin-bottom: 1rem;
+      padding: 0 0.25rem;
+    }
+
+    /* De-emphasize scan inputs while results are visible */
+    .scan-panel.results-active {
+      padding: 0.6rem 1.25rem;
+      opacity: 0.75;
+    }
+
+    .scan-panel.results-active .auth-notice,
+    .scan-panel.results-active .status-log {
+      display: none;
+    }
+
+    .btn-new-scan {
+      margin-left: 0.5rem;
+      padding: 0.3rem 0.9rem;
+      font-size: 0.8rem;
+    }
+
+    /* Tighter report spacing */
+    .comparison-section { margin-bottom: 1rem; }
+    .finding-card { margin-bottom: 0.5rem; }
+    .attack-path-section { margin-top: 1rem; }
   </style>
 </head>
 <body>
@@ -730,13 +819,6 @@
 </header>
 
 <main id="main-content" role="main">
-
-  <p class="intro-line">
-    NetGuard Sentinel scans a host, enriches findings with CVE threat data, and ranks
-    vulnerabilities by composite risk so you know exactly what to fix first.
-    Enter a host and click Scan, or expand <em>Paste scan JSON</em> below to try a sample.
-    <span class="sample-hint">New here? Click <strong>Load sample</strong>, then <strong>Analyze</strong>.</span>
-  </p>
 
   <!-- Primary: one-click scan flow -->
   <section class="scan-panel" aria-labelledby="scan-heading">
