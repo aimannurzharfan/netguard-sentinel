@@ -33,6 +33,8 @@ class Finding:
     mitre: list[MitreTechnique] = field(default_factory=list)
     rationale: str = ""
     remediation: str = ""
+    remediation_command: str = ""
+    bind_address: str = ""
     priority: int = 0
 
 
@@ -73,6 +75,7 @@ class TriageResult:
     naive_cvss_order: list[NaiveCvssEntry] = field(default_factory=list)
     attack_path: AttackPath | None = None
     tool_calls: list[ToolCall] = field(default_factory=list)
+    threat_backend: str = "cache"
 
 
 def to_json(result: TriageResult) -> str:
