@@ -31,6 +31,8 @@ CLEAN_SCAN = json.dumps({
     ]
 })
 
+NOISY_SCAN = (Path(__file__).parent.parent / "samples" / "host_noisy.json").read_text()
+
 
 @requires_cache
 def test_exposed_host_kev_ranks_first():
@@ -94,3 +96,40 @@ def test_invalid_json_raises():
 
     with pytest.raises(ValueError, match="not valid JSON"):
         triage("not json")
+
+
+@requires_cache
+def test_noisy_composite_differs_from_naive_cvss():
+    """Composite priority must differ from raw-CVSS ordering on the noisy sample.
+
+    ProFTPD 1.3.3 has the highest CVSS (10.0) but no KEV and moderate EPSS,
+    so it should rank #1 in naive CVSS order but drop in composite priority.
+    OpenSSL 1.0.1 (Heartbleed) has lower CVSS (7.5) but KEV + high EPSS,
+    so it should rank higher by composite than by CVSS.
+    """
+    from agent.agent import triage
+
+    result = triage(NOISY_SCAN)
+
+    assert len(result.naive_cvss_order) >= 2, "naive_cvss_order must be populated"
+
+    # Naive order: ProFTPD (CVSS 10.0) must be at the top.
+    assert result.naive_cvss_order[0].port == 21, (
+        f"Expected ProFTPD (port 21) first by CVSS, got port {result.naive_cvss_order[0].port}"
+    )
+
+    # Composite order: ProFTPD must NOT be priority 1 (KEV services outrank it).
+    composite_ports = [f.port for f in result.findings]
+    assert composite_ports[0] != 21, (
+        "ProFTPD should not be composite priority 1; a KEV service must outrank it"
+    )
+
+    # OpenSSL/Heartbleed (port 443) must rank higher in composite than in naive CVSS.
+    naive_ports = [e.port for e in result.naive_cvss_order]
+    composite_rank_443 = next((i for i, f in enumerate(result.findings) if f.port == 443), None)
+    naive_rank_443 = next((i for i, e in enumerate(naive_ports) if e == 443), None)
+    assert composite_rank_443 is not None and naive_rank_443 is not None
+    assert composite_rank_443 < naive_rank_443, (
+        f"OpenSSL/Heartbleed (port 443) should rank higher by composite "
+        f"(rank {composite_rank_443 + 1}) than by CVSS (rank {naive_rank_443 + 1})"
+    )

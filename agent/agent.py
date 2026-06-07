@@ -18,6 +18,7 @@ from agent.schema import (
     CVE,
     Finding,
     MitreTechnique,
+    NaiveCvssEntry,
     ToolCall,
     TriageResult,
 )
@@ -269,6 +270,20 @@ def triage(scan_input: str) -> TriageResult:
     for i, f in enumerate(findings):
         f.priority = i + 1
 
+    # Naive CVSS ranking (for UI comparison: what CVSS alone would tell you).
+    naive_cvss_order = sorted(
+        [
+            NaiveCvssEntry(
+                port=f.port,
+                service=f.service,
+                cvss=max((c.cvss for c in f.cves), default=0.0),
+            )
+            for f in findings
+        ],
+        key=lambda e: e.cvss,
+        reverse=True,
+    )
+
     # Stage 5: attack path
     attack_path = _build_attack_path(findings)
 
@@ -302,6 +317,7 @@ def triage(scan_input: str) -> TriageResult:
         host_risk_score=risk,
         summary=summary,
         findings=findings,
+        naive_cvss_order=naive_cvss_order,
         attack_path=attack_path,
         tool_calls=tool_calls,
     )

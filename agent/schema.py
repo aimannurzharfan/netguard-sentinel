@@ -58,11 +58,19 @@ class ToolCall:
 
 
 @dataclass
+class NaiveCvssEntry:
+    port: int
+    service: str
+    cvss: float
+
+
+@dataclass
 class TriageResult:
     host: str
     host_risk_score: int = 0
     summary: str = ""
     findings: list[Finding] = field(default_factory=list)
+    naive_cvss_order: list[NaiveCvssEntry] = field(default_factory=list)
     attack_path: AttackPath | None = None
     tool_calls: list[ToolCall] = field(default_factory=list)
 

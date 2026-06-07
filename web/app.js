@@ -101,6 +101,45 @@ function renderFinding(f) {
     </article>`;
 }
 
+function renderComparison(findings, naiveCvssOrder) {
+  if (!naiveCvssOrder || naiveCvssOrder.length < 2) return "";
+
+  // Sentinel order: findings sorted by priority ascending (already sorted).
+  const sentinelRows = (findings || []).map((f, i) => {
+    const topScore = Math.max(0, ...(f.cves || []).map(c => safeNum(c.composite_score)));
+    return `
+      <div class="comparison-row">
+        <span class="comparison-rank">${i + 1}.</span>
+        <span class="comparison-svc">${escHtml(f.service)} <span style="color:var(--text-muted);font-size:0.72rem">:${safeNum(f.port)}</span></span>
+        <span class="comparison-score">score ${topScore}</span>
+      </div>`;
+  }).join("");
+
+  const cvssRows = naiveCvssOrder.map((e, i) => {
+    return `
+      <div class="comparison-row">
+        <span class="comparison-rank">${i + 1}.</span>
+        <span class="comparison-svc">${escHtml(e.service)} <span style="color:var(--text-muted);font-size:0.72rem">:${safeNum(e.port)}</span></span>
+        <span class="comparison-score">CVSS ${safeNum(e.cvss).toFixed(1)}</span>
+      </div>`;
+  }).join("");
+
+  return `
+    <section class="comparison-section" aria-label="Priority comparison: CVSS vs Sentinel">
+      <h3>How prioritization changes</h3>
+      <div class="comparison-grid">
+        <div class="comparison-col">
+          <div class="comparison-col-title">Sorted by CVSS alone</div>
+          ${cvssRows}
+        </div>
+        <div class="comparison-col">
+          <div class="comparison-col-title sentinel">Sentinel composite priority</div>
+          ${sentinelRows}
+        </div>
+      </div>
+    </section>`;
+}
+
 function renderAttackPath(ap) {
   if (!ap) return "";
   const steps = (ap.steps || []).map((s, i) => {
@@ -137,6 +176,7 @@ function renderResult(data) {
 
   const findingCount = safeNum((data.findings || []).length);
   const findings = (data.findings || []).map(renderFinding).join("");
+  const comparison = renderComparison(data.findings, data.naive_cvss_order);
 
   return `
     <div class="host-header" role="region" aria-labelledby="host-heading">
@@ -149,6 +189,8 @@ function renderResult(data) {
         <span class="risk-score-label" style="color:${riskColor}">${riskScore}</span>
       </div>
     </div>
+
+    ${comparison}
 
     <section class="findings-section" aria-label="Findings ranked by risk">
       <h3>Findings (${findingCount}, ranked worst-first)</h3>

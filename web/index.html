@@ -511,6 +511,79 @@
     @media (prefers-reduced-motion: reduce) {
       .risk-bar-fill { transition: none; }
     }
+
+    /* ------------------------------------------------------------------ */
+    /* CVSS vs composite comparison                                         */
+    /* ------------------------------------------------------------------ */
+    .comparison-section {
+      margin-bottom: 1.25rem;
+    }
+
+    .comparison-section h3 {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+    }
+
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+
+    @media (max-width: 600px) {
+      .comparison-grid { grid-template-columns: 1fr; }
+    }
+
+    .comparison-col {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 0.75rem 1rem;
+    }
+
+    .comparison-col-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    .comparison-col-title.sentinel { color: var(--accent); }
+
+    .comparison-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.2rem 0;
+      font-size: 0.82rem;
+    }
+
+    .comparison-rank {
+      width: 1.4rem;
+      text-align: right;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      flex-shrink: 0;
+    }
+
+    .comparison-svc {
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .comparison-score {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
   </style>
 </head>
 <body>
