@@ -23,6 +23,28 @@ Six stages, all automated:
 
 Output is strict JSON (schema in `agent/schema.py`).
 
+## Network exposure override
+
+The triage pipeline applies a context pass after composite scoring. When a scan includes exposure data (present in pre-built samples and added automatically by the scanner for IP addresses), two rules fire:
+
+1. **Elevation**: sensitive data-store services (MySQL 3306, PostgreSQL 5432, Redis 6379, MongoDB 27017) with `bind_address == "0.0.0.0"` or `exposure == "internet"` are moved to the top of the priority list, ahead of CVE-scored services. These ports are dangerous regardless of whether a matching CVE is in the cache. The finding rationale says explicitly why the override fired.
+
+2. **Downgrade**: SMB (port 445) on a confirmed internal host (`exposure == "internal"`) is deprioritised. Lateral-movement risk is lower when the host is not internet-reachable.
+
+The override only fires on data actually present in the scan. A scan with no `exposure` field and no `bind_address` values is not modified. This is enforced in the code and verified by tests.
+
+These behaviors run in Layer 1 (deterministic Python) now. Once wired, the Foundry LLM will reason over the same exposure context with the deterministic pipeline as fallback.
+
+## Executable remediation commands
+
+Each finding includes a `remediation_command` field: a single copy-pasteable shell command for the most urgent remediation step. Examples:
+
+- Exposed Redis on 0.0.0.0: `sudo iptables -A INPUT -p tcp --dport 6379 -j DROP`
+- Apache httpd: `sudo apt-get install --only-upgrade apache2`
+- vsftpd 2.3.4 (backdoored): `sudo systemctl disable --now vsftpd`
+
+The command is rendered in the UI as a monospace block under each finding. The longer human-readable `remediation` text is kept alongside it.
+
 ## Composite scoring formula
 
 ```
