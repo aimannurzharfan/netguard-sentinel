@@ -1,60 +1,70 @@
 {
   "host": "10.0.0.99",
   "scan_time": "2026-06-06T10:00:00Z",
+  "exposure": "internet",
   "ports": [
     {
       "port": 21,
       "service": "ProFTPD",
       "version": "1.3.3",
-      "banner": "220 ProFTPD 1.3.3 Server"
+      "banner": "220 ProFTPD 1.3.3 Server",
+      "bind_address": "0.0.0.0"
     },
     {
       "port": 80,
       "service": "Apache httpd",
       "version": "2.4.49",
-      "banner": "Apache/2.4.49 (Unix)"
+      "banner": "Apache/2.4.49 (Unix)",
+      "bind_address": "0.0.0.0"
     },
     {
       "port": 22,
       "service": "OpenSSH",
       "version": "7.4",
-      "banner": "SSH-2.0-OpenSSH_7.4"
+      "banner": "SSH-2.0-OpenSSH_7.4",
+      "bind_address": "0.0.0.0"
     },
     {
       "port": 443,
       "service": "OpenSSL",
       "version": "1.0.1",
-      "banner": ""
+      "banner": "",
+      "bind_address": "0.0.0.0"
     },
     {
       "port": 2121,
       "service": "vsftpd",
       "version": "2.3.4",
-      "banner": "220 (vsFTPd 2.3.4)"
+      "banner": "220 (vsFTPd 2.3.4)",
+      "bind_address": "0.0.0.0"
     },
     {
       "port": 8080,
       "service": "nginx",
       "version": "1.18.0",
-      "banner": "Server: nginx/1.18.0"
+      "banner": "Server: nginx/1.18.0",
+      "bind_address": "0.0.0.0"
     },
     {
       "port": 8443,
       "service": "Apache Struts",
       "version": "2.3.5",
-      "banner": ""
+      "banner": "",
+      "bind_address": "0.0.0.0"
     },
     {
       "port": 3306,
       "service": "MySQL",
       "version": "8.0",
-      "banner": ""
+      "banner": "",
+      "bind_address": "0.0.0.0"
     },
     {
       "port": 6379,
       "service": "Redis",
       "version": "7.0",
-      "banner": ""
+      "banner": "",
+      "bind_address": "0.0.0.0"
     }
   ]
 }
