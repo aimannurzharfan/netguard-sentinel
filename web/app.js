@@ -397,6 +397,11 @@ el("sample-btn").addEventListener("click", () => {
   el("scan-input").focus();
 });
 
+el("try-sample-btn").addEventListener("click", () => {
+  el("scan-input").value = SAMPLE_SCAN;
+  runTriage();
+});
+
 el("clear-btn").addEventListener("click", () => {
   el("scan-input").value = "";
   clearResults();

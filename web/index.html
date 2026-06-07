@@ -805,6 +805,35 @@
     .comparison-section { margin-bottom: 1rem; }
     .finding-card { margin-bottom: 0.5rem; }
     .attack-path-section { margin-top: 1rem; }
+
+    /* ------------------------------------------------------------------ */
+    /* Page tagline and host field helper                                  */
+    /* ------------------------------------------------------------------ */
+    .page-tagline {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+    }
+
+    .host-helper-text {
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      margin-top: 0.35rem;
+    }
+
+    .scan-panel.results-active .host-helper-text { display: none; }
+
+    /* Compact legend: tight rows, small font */
+    .legend-panel .advanced-inner {
+      padding: 0.4rem 1.25rem 0.6rem;
+    }
+    .legend-panel .legend-row {
+      margin-bottom: 0.15rem;
+      font-size: 0.78rem;
+    }
+    .legend-panel .legend-row dt {
+      min-width: 7.5rem;
+    }
   </style>
 </head>
 <body>
@@ -820,6 +849,8 @@
 
 <main id="main-content" role="main">
 
+  <p class="page-tagline">Enter a host, click Scan. NetGuard Sentinel finds the open services and tells you what to fix first.</p>
+
   <!-- Primary: one-click scan flow -->
   <section class="scan-panel" aria-labelledby="scan-heading">
     <h2 id="scan-heading" class="sr-only">Scan a target host</h2>
@@ -834,15 +865,19 @@
         name="host-input"
         class="host-field"
         value="127.0.0.1"
-        placeholder="127.0.0.1 or hostname"
-        aria-describedby="scan-log"
+        placeholder="e.g. 127.0.0.1"
+        aria-describedby="host-field-hint scan-log"
         autocomplete="off"
         spellcheck="false"
       />
       <button id="scan-btn" type="button" aria-controls="results">
         Scan
       </button>
+      <button id="try-sample-btn" type="button" class="btn-secondary" aria-label="Run analysis using a built-in sample scan">
+        Try a sample host
+      </button>
     </div>
+    <p class="host-helper-text" id="host-field-hint">Enter an IP or hostname you own or are authorized to test. Common ports are scanned automatically -- you don't pick them.</p>
     <div id="scan-log" class="status-log" aria-live="polite" aria-atomic="false">
       <p class="status-log-entry">Enter a host and click Scan.</p>
     </div>
@@ -850,24 +885,24 @@
 
   <!-- Signal legend -->
   <details class="legend-panel">
-    <summary class="advanced-summary">Signal legend (what do the numbers mean?)</summary>
+    <summary class="advanced-summary">What do these mean?</summary>
     <div class="advanced-inner">
       <dl class="legend-dl">
         <div class="legend-row">
           <dt>Composite 0-100</dt>
-          <dd>Overall risk score combining severity, exploit probability, and known exploitation. Higher = fix first.</dd>
+          <dd>Risk score: severity + exploit probability + KEV. Higher = fix first.</dd>
         </div>
         <div class="legend-row">
           <dt>CVSS 0-10</dt>
-          <dd>Severity of the flaw if exploited. High CVSS alone does not mean attackers will target it soon.</dd>
+          <dd>Flaw severity. High CVSS doesn't mean attackers are targeting it yet.</dd>
         </div>
         <div class="legend-row">
           <dt>EPSS 0-100%</dt>
-          <dd>Real-world probability of exploitation in the next 30 days, from FIRST.org model data.</dd>
+          <dd>Exploit probability in the next 30 days (FIRST.org model).</dd>
         </div>
         <div class="legend-row">
           <dt>KEV</dt>
-          <dd>On CISA's Known Exploited Vulnerabilities list. Active exploitation confirmed in the wild.</dd>
+          <dd>CISA confirmed -- actively exploited in the wild right now.</dd>
         </div>
       </dl>
     </div>
