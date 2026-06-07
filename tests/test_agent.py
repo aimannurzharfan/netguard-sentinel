@@ -99,6 +99,60 @@ def test_invalid_json_raises():
 
 
 @requires_cache
+def test_exposure_override_fires():
+    """MySQL and Redis bound to 0.0.0.0 on an internet host must be elevated.
+
+    host_noisy.json has exposure=internet and bind_address=0.0.0.0 on MySQL:3306
+    and Redis:6379. Without CVE data those would rank last; the override must move
+    them ahead of the CVE-scored services to reflect their real-world danger.
+    """
+    from agent.agent import triage
+
+    result = triage(NOISY_SCAN)
+    priority_by_port = {f.port: f.priority for f in result.findings}
+
+    # Both sensitive DBs must be elevated to the top two slots.
+    assert priority_by_port.get(3306, 99) <= 2, (
+        f"MySQL (3306) should be priority <= 2 after elevation, got {priority_by_port.get(3306)}"
+    )
+    assert priority_by_port.get(6379, 99) <= 2, (
+        f"Redis (6379) should be priority <= 2 after elevation, got {priority_by_port.get(6379)}"
+    )
+
+    # The rationale must say why the finding was elevated.
+    mysql_f = next(f for f in result.findings if f.port == 3306)
+    assert "elevated" in mysql_f.rationale
+
+    # The remediation command must be an iptables DROP targeting port 3306.
+    assert "iptables" in mysql_f.remediation_command
+    assert "3306" in mysql_f.remediation_command
+
+
+@requires_cache
+def test_exposure_override_no_fire_without_data():
+    """Override must not change priorities when exposure data is absent from the scan.
+
+    EXPOSED_SCAN contains no 'exposure' key and no 'bind_address' fields, so the
+    override must leave the composite ranking unchanged and Apache stays priority 1.
+    """
+    from agent.agent import triage
+
+    result = triage(EXPOSED_SCAN)
+
+    top = next((f for f in result.findings if f.priority == 1), None)
+    assert top is not None
+    assert "Apache" in top.service, (
+        f"Apache should still be priority 1 without exposure data, got {top.service}"
+    )
+
+    for f in result.findings:
+        assert "elevated:" not in f.rationale, (
+            f"No finding should have an override rationale without exposure data, "
+            f"but found: {f.rationale}"
+        )
+
+
+@requires_cache
 def test_noisy_composite_differs_from_naive_cvss():
     """Composite priority must differ from raw-CVSS ordering on the noisy sample.
 
