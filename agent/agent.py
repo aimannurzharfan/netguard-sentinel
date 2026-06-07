@@ -10,6 +10,7 @@ Layer 2 (Foundry, Day 4): uncomment the Foundry path at the bottom of triage().
 from __future__ import annotations
 
 import json
+import os
 
 from agent import prompts
 from agent.schema import (
@@ -80,6 +81,85 @@ _REMEDIATIONS: dict[str, str] = {
     "rdp":       "enable Network Level Authentication; restrict source IPs; use MFA",
     "telnet":    "disable Telnet; replace with SSH",
 }
+
+
+# Sensitive data-store ports: exposure to the internet is its own critical risk
+# regardless of whether a matching CVE exists in the cache.
+_SENSITIVE_DB_PORTS: frozenset[int] = frozenset({3306, 5432, 6379, 27017})
+
+# Services that should only exist on internal networks; deprioritise them when
+# the scan confirms the host is internal-only.
+_INTERNAL_ONLY_PORTS: frozenset[int] = frozenset({445})
+
+# Copy-pasteable remediation commands keyed by service keyword (lowercase).
+_REMEDIATION_COMMANDS: dict[str, str] = {
+    "apache":  "sudo apt-get install --only-upgrade apache2",
+    "httpd":   "sudo apt-get install --only-upgrade apache2",
+    "nginx":   "sudo apt-get install --only-upgrade nginx",
+    "openssh": "sudo apt-get install --only-upgrade openssh-server",
+    "vsftpd":  "sudo systemctl disable --now vsftpd",
+    "proftpd": "sudo systemctl stop proftpd && sudo apt-get remove --purge proftpd",
+    "openssl": "sudo apt-get install --only-upgrade openssl",
+    "telnet":  "sudo systemctl disable --now telnetd",
+    "smb":     "sudo apt-get install --only-upgrade samba",
+    "rdp":     "sudo ufw deny 3389/tcp",
+    "struts":  "mvn versions:use-latest-releases  # then rebuild and redeploy",
+}
+
+
+def _remediation_command(service: str, port: int, bind_address: str, exposure: str) -> str:
+    """Return a single copy-pasteable command for the most impactful remediation step."""
+    svc_lower = service.lower()
+    internet_exposed = (bind_address == "0.0.0.0") or (exposure == "internet")
+    # Exposed data-store: block the port immediately.
+    if port in _SENSITIVE_DB_PORTS and internet_exposed:
+        return f"sudo iptables -A INPUT -p tcp --dport {port} -j DROP"
+    for keyword, cmd in _REMEDIATION_COMMANDS.items():
+        if keyword in svc_lower:
+            return cmd
+    return ""
+
+
+def _apply_exposure_override(findings: list[Finding], exposure: str) -> None:
+    """Reorder findings based on network exposure data actually present in the scan.
+
+    Elevates sensitive data-store services (MySQL, PostgreSQL, Redis, MongoDB)
+    when bind_address == '0.0.0.0' or the scan-level exposure is 'internet'.
+    Downgrades SMB when the host is confirmed internal-only.
+
+    Does nothing if neither exposure nor any bind_address is present in the scan,
+    so scans without this context are unaffected.
+    """
+    any_bind = any(f.bind_address for f in findings)
+    if not exposure and not any_bind:
+        return
+
+    elevated: list[Finding] = []
+    normal: list[Finding] = []
+    downgraded: list[Finding] = []
+
+    for f in findings:
+        internet_exposed = (f.bind_address == "0.0.0.0") or (exposure == "internet")
+        if f.port in _SENSITIVE_DB_PORTS and internet_exposed:
+            bind_note = f"bind_address {f.bind_address}" if f.bind_address else "internet-exposed host"
+            f.rationale = (
+                f"elevated: {f.service} on port {f.port} reachable from internet "
+                f"({bind_note}); " + f.rationale
+            )
+            elevated.append(f)
+        elif f.port in _INTERNAL_ONLY_PORTS and exposure == "internal":
+            f.rationale = "downgraded: SMB on confirmed internal host; " + f.rationale
+            downgraded.append(f)
+        else:
+            normal.append(f)
+
+    if not elevated and not downgraded:
+        return
+
+    findings.clear()
+    findings.extend(elevated + normal + downgraded)
+    for i, f in enumerate(findings):
+        f.priority = i + 1
 
 
 def _map_mitre(service: str) -> list[MitreTechnique]:
@@ -208,6 +288,8 @@ def triage(scan_input: str) -> TriageResult:
     scan = _parse_scan(scan_input)
     host = scan.get("host", "unknown")
     ports = scan.get("ports", [])
+    exposure = scan.get("exposure", "")
+    threat_backend = os.getenv("THREAT_BACKEND", "cache").lower()
 
     findings: list[Finding] = []
     tool_calls: list[ToolCall] = []
@@ -217,6 +299,7 @@ def triage(scan_input: str) -> TriageResult:
         port_num = int(p.get("port", 0))
         service = p.get("service", "")
         version = p.get("version", "")
+        bind_address = p.get("bind_address", "")
         service_str = f"{service} {version}".strip()
 
         raw_cves = threat_intel_lookup(service_str)
@@ -251,11 +334,13 @@ def triage(scan_input: str) -> TriageResult:
             port=port_num,
             service=service,
             version=version,
+            bind_address=bind_address,
             cves=cves,
             contextual_severity=severity,
             mitre=mitre,
             rationale=_rationale(cves),
             remediation=_remediation_text(service, cves),
+            remediation_command=_remediation_command(service, port_num, bind_address, exposure),
         ))
 
     # Stage 4: rank worst-first
@@ -269,6 +354,10 @@ def triage(scan_input: str) -> TriageResult:
     )
     for i, f in enumerate(findings):
         f.priority = i + 1
+
+    # Exposure override: elevate sensitive data-stores exposed to the internet;
+    # downgrade internal-only services on confirmed internal hosts.
+    _apply_exposure_override(findings, exposure)
 
     # Naive CVSS ranking (for UI comparison: what CVSS alone would tell you).
     naive_cvss_order = sorted(
@@ -320,4 +409,5 @@ def triage(scan_input: str) -> TriageResult:
         naive_cvss_order=naive_cvss_order,
         attack_path=attack_path,
         tool_calls=tool_calls,
+        threat_backend=threat_backend,
     )
