@@ -40,7 +40,9 @@ def _classify_exposure(host: str) -> str | None:
     """
     try:
         addr = ipaddress.ip_address(host)
-        return "internal" if any(addr in net for net in _INTERNAL_NETWORKS) else "internet"
+        return (
+            "internal" if any(addr in net for net in _INTERNAL_NETWORKS) else "internet"
+        )
     except ValueError:
         return None
 
@@ -50,7 +52,25 @@ BANNER_TIMEOUT = 2.0
 MAX_BANNER_BYTES = 2048
 MAX_WORKERS = 50
 
-DEFAULT_PORTS = [21, 22, 23, 25, 80, 110, 143, 443, 445, 3306, 3389, 5432, 5900, 6379, 8080, 8443, 27017]
+DEFAULT_PORTS = [
+    21,
+    22,
+    23,
+    25,
+    80,
+    110,
+    143,
+    443,
+    445,
+    3306,
+    3389,
+    5432,
+    5900,
+    6379,
+    8080,
+    8443,
+    27017,
+]
 
 # Ports where we probe with an HTTP HEAD request to elicit a Server: header.
 _HTTP_PROBE_PORTS: frozenset[int] = frozenset({80, 8080})
@@ -58,36 +78,36 @@ _HTTP_PROBE_PORTS: frozenset[int] = frozenset({80, 8080})
 # (compiled_pattern, service_name) pairs. Ordered specific-to-general so the
 # best match wins. Group 1 captures the version string.
 _FINGERPRINTS: list[tuple[re.Pattern[str], str]] = [
-    (re.compile(r"SSH-[\d.]+-OpenSSH[_/]([\d.p]+)", re.IGNORECASE),  "OpenSSH"),
-    (re.compile(r"\bApache[/ ]([\d.]+)",             re.IGNORECASE),  "Apache httpd"),
-    (re.compile(r"\bnginx[/ ]([\d.]+)",              re.IGNORECASE),  "nginx"),
-    (re.compile(r"vsFTPd[/ ]?([\d.]+)",              re.IGNORECASE),  "vsftpd"),
-    (re.compile(r"ProFTPD[/ ]?([\d.]+)",             re.IGNORECASE),  "ProFTPD"),
-    (re.compile(r"PostgreSQL[/ ]([\d.]+)",           re.IGNORECASE),  "PostgreSQL"),
-    (re.compile(r"MongoDB[/ ]([\d.]+)",              re.IGNORECASE),  "MongoDB"),
-    (re.compile(r"\bRedis[/ ]([\d.]+)",              re.IGNORECASE),  "Redis"),
-    (re.compile(r"OpenSSL[/ ]([\d.]+[a-z]?)",        re.IGNORECASE),  "OpenSSL"),
-    (re.compile(r"\bMySQL[/ ]([\d.]+)",              re.IGNORECASE),  "MySQL"),
+    (re.compile(r"SSH-[\d.]+-OpenSSH[_/]([\d.p]+)", re.IGNORECASE), "OpenSSH"),
+    (re.compile(r"\bApache[/ ]([\d.]+)", re.IGNORECASE), "Apache httpd"),
+    (re.compile(r"\bnginx[/ ]([\d.]+)", re.IGNORECASE), "nginx"),
+    (re.compile(r"vsFTPd[/ ]?([\d.]+)", re.IGNORECASE), "vsftpd"),
+    (re.compile(r"ProFTPD[/ ]?([\d.]+)", re.IGNORECASE), "ProFTPD"),
+    (re.compile(r"PostgreSQL[/ ]([\d.]+)", re.IGNORECASE), "PostgreSQL"),
+    (re.compile(r"MongoDB[/ ]([\d.]+)", re.IGNORECASE), "MongoDB"),
+    (re.compile(r"\bRedis[/ ]([\d.]+)", re.IGNORECASE), "Redis"),
+    (re.compile(r"OpenSSL[/ ]([\d.]+[a-z]?)", re.IGNORECASE), "OpenSSL"),
+    (re.compile(r"\bMySQL[/ ]([\d.]+)", re.IGNORECASE), "MySQL"),
 ]
 
 # Port-based fallback service name when no banner regex matches.
 _PORT_SERVICES: dict[int, str] = {
-    21:    "FTP",
-    22:    "SSH",
-    23:    "Telnet",
-    25:    "SMTP",
-    80:    "HTTP",
-    110:   "POP3",
-    143:   "IMAP",
-    443:   "HTTPS",
-    445:   "SMB",
-    3306:  "MySQL",
-    3389:  "RDP",
-    5432:  "PostgreSQL",
-    5900:  "VNC",
-    6379:  "Redis",
-    8080:  "HTTP",
-    8443:  "HTTPS",
+    21: "FTP",
+    22: "SSH",
+    23: "Telnet",
+    25: "SMTP",
+    80: "HTTP",
+    110: "POP3",
+    143: "IMAP",
+    443: "HTTPS",
+    445: "SMB",
+    3306: "MySQL",
+    3389: "RDP",
+    5432: "PostgreSQL",
+    5900: "VNC",
+    6379: "Redis",
+    8080: "HTTP",
+    8443: "HTTPS",
     27017: "MongoDB",
 }
 
@@ -137,10 +157,10 @@ def _scan_port(host: str, port: int) -> dict | None:
         return None
     service, version = _fingerprint(banner, port)
     return {
-        "port":    port,
+        "port": port,
         "service": service,
         "version": version,
-        "banner":  banner[:256],
+        "banner": banner[:256],
     }
 
 
@@ -164,9 +184,9 @@ def scan(host: str, ports: list[int] | None = None) -> dict:
                 pass
     open_ports.sort(key=lambda p: p["port"])
     result: dict = {
-        "host":      host,
+        "host": host,
         "scan_time": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "ports":     open_ports,
+        "ports": open_ports,
     }
     exposure = _classify_exposure(host)
     if exposure is not None:
@@ -196,9 +216,7 @@ if __name__ == "__main__":
     port_list: list[int] | None = None
     if args.ports:
         port_list = [
-            int(p.strip())
-            for p in args.ports.split(",")
-            if p.strip().isdigit()
+            int(p.strip()) for p in args.ports.split(",") if p.strip().isdigit()
         ]
 
     result = scan(args.host, port_list)

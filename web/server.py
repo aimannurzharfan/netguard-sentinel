@@ -33,6 +33,16 @@ def index() -> Response:
     return send_file(_WEB_DIR / "index.html")
 
 
+@app.route("/app.js")
+def serve_app_js() -> Response:
+    return send_file(_WEB_DIR / "app.js", mimetype="application/javascript")
+
+
+@app.route("/favicon.ico")
+def serve_favicon() -> Response:
+    return Response(status=204)
+
+
 @app.post("/scan")
 def run_scan() -> Response:
     """Scan a host then triage the findings. Returns a TriageResult JSON."""
@@ -46,14 +56,18 @@ def run_scan() -> Response:
     host = host.strip()
 
     if not _VALID_HOST.match(host):
-        return jsonify({"error": "Invalid host format (use a hostname or IP address)."}), 400
+        return jsonify(
+            {"error": "Invalid host format (use a hostname or IP address)."}
+        ), 400
 
     ports = data.get("ports")
     if ports is not None:
         if not isinstance(ports, list) or not all(
             isinstance(p, int) and 1 <= p <= 65535 for p in ports
         ):
-            return jsonify({"error": "ports must be a list of integers in range 1-65535."}), 400
+            return jsonify(
+                {"error": "ports must be a list of integers in range 1-65535."}
+            ), 400
 
     try:
         from scanner.scan import DEFAULT_PORTS, scan as tcp_scan

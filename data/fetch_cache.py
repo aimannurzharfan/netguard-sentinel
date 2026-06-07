@@ -123,14 +123,16 @@ def build_cache() -> None:
             nvd = fetch_nvd(cve_id)
             if nvd is None:
                 continue
-            records.append({
-                "id": cve_id,
-                "service_tag": service_tag,
-                "cvss": nvd["cvss"],
-                "epss": epss_scores.get(cve_id, 0.0),
-                "kev": cve_id in kev,
-                "description": nvd["description"],
-            })
+            records.append(
+                {
+                    "id": cve_id,
+                    "service_tag": service_tag,
+                    "cvss": nvd["cvss"],
+                    "epss": epss_scores.get(cve_id, 0.0),
+                    "kev": cve_id in kev,
+                    "description": nvd["description"],
+                }
+            )
             time.sleep(0.6)  # NVD rate limit: ~5 req/s without key, 50/s with key
 
     out = CACHE_DIR / "cves.json"

@@ -66,12 +66,14 @@ def lookup(service: str, top_k: int = TOP_K) -> list[dict]:
         rec = dict(zip(cols, row))
         if rec.get("similarity", 0) < SIMILARITY_THRESHOLD:
             continue
-        results.append({
-            "id": rec["id"],
-            "cvss": float(rec["cvss"] or 0),
-            "epss": float(rec["epss"] or 0),
-            "kev": bool(rec["kev"]),
-            "description": rec.get("description", ""),
-            "similarity": float(rec.get("similarity", 0)),
-        })
+        results.append(
+            {
+                "id": rec["id"],
+                "cvss": float(rec["cvss"] or 0),
+                "epss": float(rec["epss"] or 0),
+                "kev": bool(rec["kev"]),
+                "description": rec.get("description", ""),
+                "similarity": float(rec.get("similarity", 0)),
+            }
+        )
     return results

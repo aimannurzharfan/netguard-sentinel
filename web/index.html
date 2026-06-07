@@ -631,6 +631,91 @@
     .status-log-entry {
       margin: 0;
     }
+
+    /* ------------------------------------------------------------------ */
+    /* Intro line and guidance                                              */
+    /* ------------------------------------------------------------------ */
+    .intro-line {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 1rem;
+      line-height: 1.7;
+    }
+
+    .sample-hint {
+      display: block;
+      margin-top: 0.25rem;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Signal legend                                                        */
+    /* ------------------------------------------------------------------ */
+    .legend-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      margin-bottom: 0.75rem;
+      overflow: hidden;
+    }
+
+    .legend-dl {
+      margin: 0.75rem 0 0;
+    }
+
+    .legend-row {
+      display: flex;
+      gap: 0.75rem;
+      margin-bottom: 0.5rem;
+      font-size: 0.82rem;
+    }
+
+    .legend-row dt {
+      font-weight: 700;
+      color: var(--text);
+      white-space: nowrap;
+      min-width: 10rem;
+      flex-shrink: 0;
+    }
+
+    .legend-row dd {
+      color: var(--text-muted);
+      margin: 0;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Results intro note and empty state                                   */
+    /* ------------------------------------------------------------------ */
+    .results-intro-note {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+      padding: 0.5rem 0.75rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 0.375rem;
+    }
+
+    .no-findings-msg {
+      font-size: 0.9rem;
+      color: var(--low-fg);
+      background: var(--low-bg);
+      border-radius: 0.5rem;
+      padding: 1rem 1.25rem;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Narrow screen (380px)                                                */
+    /* ------------------------------------------------------------------ */
+    @media (max-width: 420px) {
+      main { padding: 0.75rem; }
+      .host-row { flex-direction: column; align-items: stretch; }
+      .host-field { min-width: 0; }
+      .host-row button,
+      .advanced-actions button { width: 100%; }
+      .cve-item { flex-wrap: wrap; }
+      .legend-row { flex-direction: column; gap: 0.15rem; }
+      .legend-row dt { min-width: unset; white-space: normal; }
+    }
   </style>
 </head>
 <body>
@@ -645,6 +730,13 @@
 </header>
 
 <main id="main-content" role="main">
+
+  <p class="intro-line">
+    NetGuard Sentinel scans a host, enriches findings with CVE threat data, and ranks
+    vulnerabilities by composite risk so you know exactly what to fix first.
+    Enter a host and click Scan, or expand <em>Paste scan JSON</em> below to try a sample.
+    <span class="sample-hint">New here? Click <strong>Load sample</strong>, then <strong>Analyze</strong>.</span>
+  </p>
 
   <!-- Primary: one-click scan flow -->
   <section class="scan-panel" aria-labelledby="scan-heading">
@@ -673,6 +765,31 @@
       <p class="status-log-entry">Enter a host and click Scan.</p>
     </div>
   </section>
+
+  <!-- Signal legend -->
+  <details class="legend-panel">
+    <summary class="advanced-summary">Signal legend (what do the numbers mean?)</summary>
+    <div class="advanced-inner">
+      <dl class="legend-dl">
+        <div class="legend-row">
+          <dt>Composite 0-100</dt>
+          <dd>Overall risk score combining severity, exploit probability, and known exploitation. Higher = fix first.</dd>
+        </div>
+        <div class="legend-row">
+          <dt>CVSS 0-10</dt>
+          <dd>Severity of the flaw if exploited. High CVSS alone does not mean attackers will target it soon.</dd>
+        </div>
+        <div class="legend-row">
+          <dt>EPSS 0-100%</dt>
+          <dd>Real-world probability of exploitation in the next 30 days, from FIRST.org model data.</dd>
+        </div>
+        <div class="legend-row">
+          <dt>KEV</dt>
+          <dd>On CISA's Known Exploited Vulnerabilities list. Active exploitation confirmed in the wild.</dd>
+        </div>
+      </dl>
+    </div>
+  </details>
 
   <!-- Secondary: paste scan JSON (advanced / offline demo) -->
   <details class="advanced-panel">

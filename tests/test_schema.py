@@ -1,7 +1,17 @@
 """Unit tests for schema validation and serialisation."""
 
 import json
-from agent.schema import AttackPath, AttackStep, CVE, Finding, MitreTechnique, ToolCall, TriageResult, to_json, validate
+from agent.schema import (
+    AttackPath,
+    AttackStep,
+    CVE,
+    Finding,
+    MitreTechnique,
+    ToolCall,
+    TriageResult,
+    to_json,
+    validate,
+)
 
 
 def _minimal_result() -> TriageResult:
@@ -14,9 +24,24 @@ def _minimal_result() -> TriageResult:
                 port=80,
                 service="Apache httpd",
                 version="2.4.49",
-                cves=[CVE(id="CVE-2021-41773", cvss=7.5, epss=0.97, kev=True, composite_score=91, summary="path traversal")],
+                cves=[
+                    CVE(
+                        id="CVE-2021-41773",
+                        cvss=7.5,
+                        epss=0.97,
+                        kev=True,
+                        composite_score=91,
+                        summary="path traversal",
+                    )
+                ],
                 contextual_severity="critical",
-                mitre=[MitreTechnique(technique="T1190", name="Exploit Public-Facing Application", tactic="Initial Access")],
+                mitre=[
+                    MitreTechnique(
+                        technique="T1190",
+                        name="Exploit Public-Facing Application",
+                        tactic="Initial Access",
+                    )
+                ],
                 rationale="on CISA KEV, EPSS 97%",
                 remediation="upgrade Apache to 2.4.62",
                 priority=1,
@@ -24,10 +49,18 @@ def _minimal_result() -> TriageResult:
         ],
         attack_path=AttackPath(
             narrative="Attacker exploits Apache for initial access.",
-            steps=[AttackStep(finding_port=80, technique="T1190", tactic="Initial Access")],
+            steps=[
+                AttackStep(finding_port=80, technique="T1190", tactic="Initial Access")
+            ],
             break_point="Patch Apache first.",
         ),
-        tool_calls=[ToolCall(tool="threat_intel_lookup", input="Apache httpd 2.4.49", result_summary="1 CVE, 1 KEV")],
+        tool_calls=[
+            ToolCall(
+                tool="threat_intel_lookup",
+                input="Apache httpd 2.4.49",
+                result_summary="1 CVE, 1 KEV",
+            )
+        ],
     )
 
 

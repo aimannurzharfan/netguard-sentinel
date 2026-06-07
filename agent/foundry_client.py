@@ -18,7 +18,11 @@ def is_configured() -> bool:
     """Return True if all three Foundry env vars are present."""
     return all(
         os.getenv(k)
-        for k in ("FOUNDRY_PROJECT_ENDPOINT", "FOUNDRY_MODEL_DEPLOYMENT", "FOUNDRY_API_KEY")
+        for k in (
+            "FOUNDRY_PROJECT_ENDPOINT",
+            "FOUNDRY_MODEL_DEPLOYMENT",
+            "FOUNDRY_API_KEY",
+        )
     )
 
 

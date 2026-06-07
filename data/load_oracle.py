@@ -68,7 +68,9 @@ def _to_vector(floats: list[float]) -> array.array:
 
 def load() -> None:
     if not CACHE_FILE.exists():
-        raise FileNotFoundError(f"Cache not found: {CACHE_FILE}. Run data/fetch_cache.py first.")
+        raise FileNotFoundError(
+            f"Cache not found: {CACHE_FILE}. Run data/fetch_cache.py first."
+        )
 
     records = json.loads(CACHE_FILE.read_text())
     print(f"Loaded {len(records)} records from cache.")

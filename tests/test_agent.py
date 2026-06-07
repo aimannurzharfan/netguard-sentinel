@@ -12,24 +12,40 @@ from pathlib import Path
 import pytest
 
 CACHE = Path(__file__).parent.parent / "data" / "cache" / "cves.json"
-requires_cache = pytest.mark.skipif(not CACHE.exists(), reason="data/cache/cves.json not built yet")
+requires_cache = pytest.mark.skipif(
+    not CACHE.exists(), reason="data/cache/cves.json not built yet"
+)
 
-EXPOSED_SCAN = json.dumps({
-    "host": "10.0.0.5",
-    "ports": [
-        {"port": 80,  "service": "Apache httpd", "version": "2.4.49", "banner": "Apache/2.4.49"},
-        {"port": 21,  "service": "vsftpd",        "version": "2.3.4",  "banner": "220 vsftpd 2.3.4"},
-        {"port": 22,  "service": "OpenSSH",       "version": "7.4",    "banner": ""},
-    ]
-})
+EXPOSED_SCAN = json.dumps(
+    {
+        "host": "10.0.0.5",
+        "ports": [
+            {
+                "port": 80,
+                "service": "Apache httpd",
+                "version": "2.4.49",
+                "banner": "Apache/2.4.49",
+            },
+            {
+                "port": 21,
+                "service": "vsftpd",
+                "version": "2.3.4",
+                "banner": "220 vsftpd 2.3.4",
+            },
+            {"port": 22, "service": "OpenSSH", "version": "7.4", "banner": ""},
+        ],
+    }
+)
 
-CLEAN_SCAN = json.dumps({
-    "host": "10.0.0.20",
-    "ports": [
-        {"port": 22,  "service": "OpenSSH", "version": "8.9",    "banner": ""},
-        {"port": 443, "service": "nginx",    "version": "1.24.0", "banner": ""},
-    ]
-})
+CLEAN_SCAN = json.dumps(
+    {
+        "host": "10.0.0.20",
+        "ports": [
+            {"port": 22, "service": "OpenSSH", "version": "8.9", "banner": ""},
+            {"port": 443, "service": "nginx", "version": "1.24.0", "banner": ""},
+        ],
+    }
+)
 
 NOISY_SCAN = (Path(__file__).parent.parent / "samples" / "host_noisy.json").read_text()
 
@@ -180,7 +196,9 @@ def test_noisy_composite_differs_from_naive_cvss():
 
     # OpenSSL/Heartbleed (port 443) must rank higher in composite than in naive CVSS.
     naive_ports = [e.port for e in result.naive_cvss_order]
-    composite_rank_443 = next((i for i, f in enumerate(result.findings) if f.port == 443), None)
+    composite_rank_443 = next(
+        (i for i, f in enumerate(result.findings) if f.port == 443), None
+    )
     naive_rank_443 = next((i for i, e in enumerate(naive_ports) if e == 443), None)
     assert composite_rank_443 is not None and naive_rank_443 is not None
     assert composite_rank_443 < naive_rank_443, (

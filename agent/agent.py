@@ -29,57 +29,72 @@ from tools.threat_intel import threat_intel_lookup
 # MITRE ATT&CK technique lookup by service keyword.
 # Each entry: (technique_id, technique_name, tactic).
 _MITRE: dict[str, list[tuple[str, str, str]]] = {
-    "apache":        [("T1190", "Exploit Public-Facing Application", "Initial Access")],
-    "httpd":         [("T1190", "Exploit Public-Facing Application", "Initial Access")],
-    "nginx":         [("T1190", "Exploit Public-Facing Application", "Initial Access")],
-    "iis":           [("T1190", "Exploit Public-Facing Application", "Initial Access")],
-    "tomcat":        [("T1190", "Exploit Public-Facing Application", "Initial Access")],
-    "struts":        [("T1190", "Exploit Public-Facing Application", "Initial Access")],
-    "http":          [("T1190", "Exploit Public-Facing Application", "Initial Access")],
-    "https":         [("T1190", "Exploit Public-Facing Application", "Initial Access")],
-    "ssh":           [("T1021.004", "Remote Services: SSH", "Lateral Movement")],
-    "openssh":       [("T1021.004", "Remote Services: SSH", "Lateral Movement")],
-    "ftp":           [("T1190", "Exploit Public-Facing Application", "Initial Access"),
-                      ("T1078", "Valid Accounts", "Initial Access")],
-    "vsftpd":        [("T1190", "Exploit Public-Facing Application", "Initial Access")],
-    "proftpd":       [("T1190", "Exploit Public-Facing Application", "Initial Access")],
-    "smb":           [("T1021.002", "Remote Services: SMB/Windows Admin Shares", "Lateral Movement")],
-    "rdp":           [("T1021.001", "Remote Services: Remote Desktop Protocol", "Lateral Movement")],
-    "telnet":        [("T1021", "Remote Services", "Lateral Movement")],
-    "mysql":         [("T1190", "Exploit Public-Facing Application", "Initial Access")],
-    "postgres":      [("T1190", "Exploit Public-Facing Application", "Initial Access")],
-    "postgresql":    [("T1190", "Exploit Public-Facing Application", "Initial Access")],
-    "mongodb":       [("T1190", "Exploit Public-Facing Application", "Initial Access")],
-    "redis":         [("T1190", "Exploit Public-Facing Application", "Initial Access")],
+    "apache": [("T1190", "Exploit Public-Facing Application", "Initial Access")],
+    "httpd": [("T1190", "Exploit Public-Facing Application", "Initial Access")],
+    "nginx": [("T1190", "Exploit Public-Facing Application", "Initial Access")],
+    "iis": [("T1190", "Exploit Public-Facing Application", "Initial Access")],
+    "tomcat": [("T1190", "Exploit Public-Facing Application", "Initial Access")],
+    "struts": [("T1190", "Exploit Public-Facing Application", "Initial Access")],
+    "http": [("T1190", "Exploit Public-Facing Application", "Initial Access")],
+    "https": [("T1190", "Exploit Public-Facing Application", "Initial Access")],
+    "ssh": [("T1021.004", "Remote Services: SSH", "Lateral Movement")],
+    "openssh": [("T1021.004", "Remote Services: SSH", "Lateral Movement")],
+    "ftp": [
+        ("T1190", "Exploit Public-Facing Application", "Initial Access"),
+        ("T1078", "Valid Accounts", "Initial Access"),
+    ],
+    "vsftpd": [("T1190", "Exploit Public-Facing Application", "Initial Access")],
+    "proftpd": [("T1190", "Exploit Public-Facing Application", "Initial Access")],
+    "smb": [
+        ("T1021.002", "Remote Services: SMB/Windows Admin Shares", "Lateral Movement")
+    ],
+    "rdp": [
+        ("T1021.001", "Remote Services: Remote Desktop Protocol", "Lateral Movement")
+    ],
+    "telnet": [("T1021", "Remote Services", "Lateral Movement")],
+    "mysql": [("T1190", "Exploit Public-Facing Application", "Initial Access")],
+    "postgres": [("T1190", "Exploit Public-Facing Application", "Initial Access")],
+    "postgresql": [("T1190", "Exploit Public-Facing Application", "Initial Access")],
+    "mongodb": [("T1190", "Exploit Public-Facing Application", "Initial Access")],
+    "redis": [("T1190", "Exploit Public-Facing Application", "Initial Access")],
     "elasticsearch": [("T1190", "Exploit Public-Facing Application", "Initial Access")],
-    "openssl":       [("T1190", "Exploit Public-Facing Application", "Initial Access")],
+    "openssl": [("T1190", "Exploit Public-Facing Application", "Initial Access")],
 }
 
 _TACTIC_ORDER = {
-    "Reconnaissance": 0, "Resource Development": 1, "Initial Access": 2,
-    "Execution": 3, "Persistence": 4, "Privilege Escalation": 5,
-    "Defense Evasion": 6, "Credential Access": 7, "Discovery": 8,
-    "Lateral Movement": 9, "Collection": 10,
-    "Command and Control": 11, "Exfiltration": 12, "Impact": 13,
+    "Reconnaissance": 0,
+    "Resource Development": 1,
+    "Initial Access": 2,
+    "Execution": 3,
+    "Persistence": 4,
+    "Privilege Escalation": 5,
+    "Defense Evasion": 6,
+    "Credential Access": 7,
+    "Discovery": 8,
+    "Lateral Movement": 9,
+    "Collection": 10,
+    "Command and Control": 11,
+    "Exfiltration": 12,
+    "Impact": 13,
 }
 
 _REMEDIATIONS: dict[str, str] = {
-    "apache":    "upgrade Apache httpd to 2.4.62 or later",
-    "httpd":     "upgrade Apache httpd to 2.4.62 or later",
-    "nginx":     "upgrade nginx to 1.26.x (mainline) or 1.24.x (stable)",
-    "openssh":   "upgrade OpenSSH and enforce key-based authentication; disable password auth",
-    "vsftpd":    "replace vsftpd 2.3.4 (backdoored); close port 21 or migrate to SFTP",
-    "proftpd":   "upgrade ProFTPD to 1.3.8 or later; restrict to localhost if not externally needed",
-    "ftp":       "disable plain FTP; replace with SFTP or FTPS",
-    "openssl":   "upgrade OpenSSL to 3.x; replace TLS 1.0/1.1 configurations",
-    "struts":    "upgrade Apache Struts to 6.x; apply content-type filtering",
-    "mysql":     "upgrade MySQL; bind to 127.0.0.1 unless remote access is required",
-    "postgres":  "upgrade PostgreSQL; restrict pg_hba.conf to trusted hosts",
-    "mongodb":   "upgrade MongoDB; enable authentication and bind to localhost",
-    "redis":     "upgrade Redis; bind to 127.0.0.1; enable requirepass",
-    "smb":       "disable SMBv1; patch to current; restrict to internal networks only",
-    "rdp":       "enable Network Level Authentication; restrict source IPs; use MFA",
-    "telnet":    "disable Telnet; replace with SSH",
+    "apache": "upgrade Apache httpd to 2.4.62 or later",
+    "httpd": "upgrade Apache httpd to 2.4.62 or later",
+    "nginx": "upgrade nginx to 1.26.x (mainline) or 1.24.x (stable)",
+    "openssh": "upgrade OpenSSH and enforce key-based authentication; disable password auth",
+    "vsftpd": "replace vsftpd 2.3.4 (backdoored); close port 21 or migrate to SFTP",
+    "proftpd": "upgrade ProFTPD to 1.3.8 or later; restrict to localhost if not externally needed",
+    "ftp": "disable plain FTP; replace with SFTP or FTPS",
+    "openssl": "upgrade OpenSSL to 3.x; replace TLS 1.0/1.1 configurations",
+    "struts": "upgrade Apache Struts to 6.x; apply content-type filtering",
+    "mysql": "upgrade MySQL; bind to 127.0.0.1 unless remote access is required",
+    "postgres": "upgrade PostgreSQL; restrict pg_hba.conf to trusted hosts",
+    "mongodb": "upgrade MongoDB; enable authentication and bind to localhost",
+    "redis": "upgrade Redis; bind to 127.0.0.1; enable requirepass",
+    "smb": "disable SMBv1; patch to current; restrict to internal networks only",
+    "rdp": "enable Network Level Authentication; restrict source IPs; use MFA",
+    "telnet": "disable Telnet; replace with SSH",
 }
 
 
@@ -93,21 +108,23 @@ _INTERNAL_ONLY_PORTS: frozenset[int] = frozenset({445})
 
 # Copy-pasteable remediation commands keyed by service keyword (lowercase).
 _REMEDIATION_COMMANDS: dict[str, str] = {
-    "apache":  "sudo apt-get install --only-upgrade apache2",
-    "httpd":   "sudo apt-get install --only-upgrade apache2",
-    "nginx":   "sudo apt-get install --only-upgrade nginx",
+    "apache": "sudo apt-get install --only-upgrade apache2",
+    "httpd": "sudo apt-get install --only-upgrade apache2",
+    "nginx": "sudo apt-get install --only-upgrade nginx",
     "openssh": "sudo apt-get install --only-upgrade openssh-server",
-    "vsftpd":  "sudo systemctl disable --now vsftpd",
+    "vsftpd": "sudo systemctl disable --now vsftpd",
     "proftpd": "sudo systemctl stop proftpd && sudo apt-get remove --purge proftpd",
     "openssl": "sudo apt-get install --only-upgrade openssl",
-    "telnet":  "sudo systemctl disable --now telnetd",
-    "smb":     "sudo apt-get install --only-upgrade samba",
-    "rdp":     "sudo ufw deny 3389/tcp",
-    "struts":  "mvn versions:use-latest-releases  # then rebuild and redeploy",
+    "telnet": "sudo systemctl disable --now telnetd",
+    "smb": "sudo apt-get install --only-upgrade samba",
+    "rdp": "sudo ufw deny 3389/tcp",
+    "struts": "mvn versions:use-latest-releases  # then rebuild and redeploy",
 }
 
 
-def _remediation_command(service: str, port: int, bind_address: str, exposure: str) -> str:
+def _remediation_command(
+    service: str, port: int, bind_address: str, exposure: str
+) -> str:
     """Return a single copy-pasteable command for the most impactful remediation step."""
     svc_lower = service.lower()
     internet_exposed = (bind_address == "0.0.0.0") or (exposure == "internet")
@@ -141,7 +158,11 @@ def _apply_exposure_override(findings: list[Finding], exposure: str) -> None:
     for f in findings:
         internet_exposed = (f.bind_address == "0.0.0.0") or (exposure == "internet")
         if f.port in _SENSITIVE_DB_PORTS and internet_exposed:
-            bind_note = f"bind_address {f.bind_address}" if f.bind_address else "internet-exposed host"
+            bind_note = (
+                f"bind_address {f.bind_address}"
+                if f.bind_address
+                else "internet-exposed host"
+            )
             f.rationale = (
                 f"elevated: {f.service} on port {f.port} reachable from internet "
                 f"({bind_note}); " + f.rationale
@@ -170,7 +191,9 @@ def _map_mitre(service: str) -> list[MitreTechnique]:
         if keyword in svc_lower:
             for tid, name, tactic in entries:
                 if tid not in seen:
-                    techniques.append(MitreTechnique(technique=tid, name=name, tactic=tactic))
+                    techniques.append(
+                        MitreTechnique(technique=tid, name=name, tactic=tactic)
+                    )
                     seen.add(tid)
     return techniques
 
@@ -217,11 +240,13 @@ def _build_attack_path(findings: list[Finding]) -> AttackPath | None:
     for f in ordered:
         if f.mitre:
             m = min(f.mitre, key=lambda x: _TACTIC_ORDER.get(x.tactic, 99))
-            steps.append(AttackStep(
-                finding_port=f.port,
-                technique=m.technique,
-                tactic=m.tactic,
-            ))
+            steps.append(
+                AttackStep(
+                    finding_port=f.port,
+                    technique=m.technique,
+                    tactic=m.tactic,
+                )
+            )
 
     if not steps:
         return None
@@ -278,6 +303,7 @@ def _parse_scan(scan_json: str) -> dict:
 # Public entry point                                                            #
 # --------------------------------------------------------------------------- #
 
+
 def triage(scan_input: str) -> TriageResult:
     """Run the six-step triage pipeline on a scan JSON string.
 
@@ -304,24 +330,28 @@ def triage(scan_input: str) -> TriageResult:
 
         raw_cves = threat_intel_lookup(service_str)
         kev_count = sum(1 for c in raw_cves if c.get("kev"))
-        tool_calls.append(ToolCall(
-            tool="threat_intel_lookup",
-            input=service_str,
-            result_summary=f"{len(raw_cves)} CVEs, {kev_count} KEV",
-        ))
+        tool_calls.append(
+            ToolCall(
+                tool="threat_intel_lookup",
+                input=service_str,
+                result_summary=f"{len(raw_cves)} CVEs, {kev_count} KEV",
+            )
+        )
 
         # Stage 3: score
         cves: list[CVE] = []
         for raw in raw_cves:
             score = composite(raw["cvss"], raw["epss"], raw["kev"])
-            cves.append(CVE(
-                id=raw["id"],
-                cvss=raw["cvss"],
-                epss=raw["epss"],
-                kev=raw["kev"],
-                composite_score=score,
-                summary=raw.get("description", "")[:120],
-            ))
+            cves.append(
+                CVE(
+                    id=raw["id"],
+                    cvss=raw["cvss"],
+                    epss=raw["epss"],
+                    kev=raw["kev"],
+                    composite_score=score,
+                    summary=raw.get("description", "")[:120],
+                )
+            )
         cves.sort(key=lambda c: c.composite_score, reverse=True)
 
         # Stage 3: contextual severity for the finding
@@ -330,18 +360,22 @@ def triage(scan_input: str) -> TriageResult:
         severity = contextual_severity(top_score, top_kev)
 
         mitre = _map_mitre(service)
-        findings.append(Finding(
-            port=port_num,
-            service=service,
-            version=version,
-            bind_address=bind_address,
-            cves=cves,
-            contextual_severity=severity,
-            mitre=mitre,
-            rationale=_rationale(cves),
-            remediation=_remediation_text(service, cves),
-            remediation_command=_remediation_command(service, port_num, bind_address, exposure),
-        ))
+        findings.append(
+            Finding(
+                port=port_num,
+                service=service,
+                version=version,
+                bind_address=bind_address,
+                cves=cves,
+                contextual_severity=severity,
+                mitre=mitre,
+                rationale=_rationale(cves),
+                remediation=_remediation_text(service, cves),
+                remediation_command=_remediation_command(
+                    service, port_num, bind_address, exposure
+                ),
+            )
+        )
 
     # Stage 4: rank worst-first
     findings.sort(
@@ -381,13 +415,19 @@ def triage(scan_input: str) -> TriageResult:
     if risk >= 80:
         summary = f"Host {host} is at critical risk: multiple actively exploited vulnerabilities present."
     elif risk >= 60:
-        summary = f"Host {host} has high risk: exploitable services require urgent patching."
+        summary = (
+            f"Host {host} has high risk: exploitable services require urgent patching."
+        )
     elif risk >= 35:
         summary = f"Host {host} has moderate risk: some findings need attention."
     elif risk > 0:
-        summary = f"Host {host} has low risk: no actively exploited vulnerabilities found."
+        summary = (
+            f"Host {host} has low risk: no actively exploited vulnerabilities found."
+        )
     else:
-        summary = f"Host {host}: no known vulnerabilities matched the detected services."
+        summary = (
+            f"Host {host}: no known vulnerabilities matched the detected services."
+        )
 
     # FOUNDRY SEAM (Day 4): replace the local pipeline above with:
     #

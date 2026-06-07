@@ -36,9 +36,7 @@ def main() -> None:
     port_list: list[int] | None = None
     if args.ports:
         port_list = [
-            int(p.strip())
-            for p in args.ports.split(",")
-            if p.strip().isdigit()
+            int(p.strip()) for p in args.ports.split(",") if p.strip().isdigit()
         ]
 
     print(f"Scanning {args.host} ...", file=sys.stderr)

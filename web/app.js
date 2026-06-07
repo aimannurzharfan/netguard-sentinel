@@ -195,8 +195,15 @@ function renderResult(data) {
                   : "var(--low-fg)";
 
   const findingCount = safeNum((data.findings || []).length);
-  const findings = (data.findings || []).map(renderFinding).join("");
   const comparison = renderComparison(data.findings, data.naive_cvss_order);
+
+  const findingsContent = findingCount === 0
+    ? `<p class="no-findings-msg">No vulnerabilities found. All scanned services appear clean.</p>`
+    : `<p class="results-intro-note">Findings ranked by composite risk (CVSS + real-world exploit probability + KEV). Priority 1 is the most urgent fix.</p>
+       <section class="findings-section" aria-label="Findings ranked by risk">
+         <h3>Findings (${findingCount}, ranked worst-first)</h3>
+         ${(data.findings || []).map(renderFinding).join("")}
+       </section>`;
 
   return `
     <div class="host-header" role="region" aria-labelledby="host-heading">
@@ -212,10 +219,7 @@ function renderResult(data) {
 
     ${comparison}
 
-    <section class="findings-section" aria-label="Findings ranked by risk">
-      <h3>Findings (${findingCount}, ranked worst-first)</h3>
-      ${findings}
-    </section>
+    ${findingsContent}
 
     ${renderAttackPath(data.attack_path)}`;
 }
@@ -252,7 +256,9 @@ async function runScan() {
   }
 
   const btn = el("scan-btn");
+  const origScanLabel = btn.textContent;
   btn.disabled = true;
+  btn.textContent = "Scanning...";
   clearResults();
   clearScanLog();
   setScanStatus(`Scanning ports and grabbing banners on ${host}...`);
@@ -291,6 +297,7 @@ async function runScan() {
     setScanStatus("Scan failed.");
   } finally {
     btn.disabled = false;
+    btn.textContent = origScanLabel;
   }
 }
 
@@ -307,7 +314,9 @@ async function runTriage() {
   }
 
   const btn = el("triage-btn");
+  const origTriageLabel = btn.textContent;
   btn.disabled = true;
+  btn.textContent = "Analyzing...";
   clearResults();
   setPasteStatus("Enriching findings via threat intel...");
 
@@ -343,6 +352,7 @@ async function runTriage() {
     setPasteStatus("Analysis failed.");
   } finally {
     btn.disabled = false;
+    btn.textContent = origTriageLabel;
   }
 }
 

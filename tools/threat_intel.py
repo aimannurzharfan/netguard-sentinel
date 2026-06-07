@@ -46,18 +46,21 @@ def _cache_lookup(service: str) -> list[dict]:
         tag_words = set(tag.split())
         svc_words = set(service_lower.split())
         if tag_words & svc_words:
-            matched.append({
-                "id": rec["id"],
-                "cvss": float(rec.get("cvss", 0)),
-                "epss": float(rec.get("epss", 0)),
-                "kev": bool(rec.get("kev", False)),
-                "description": rec.get("description", ""),
-            })
+            matched.append(
+                {
+                    "id": rec["id"],
+                    "cvss": float(rec.get("cvss", 0)),
+                    "epss": float(rec.get("epss", 0)),
+                    "kev": bool(rec.get("kev", False)),
+                    "description": rec.get("description", ""),
+                }
+            )
     return matched
 
 
 def _oracle_lookup(service: str) -> list[dict]:
     from tools.oracle_backend import lookup
+
     return lookup(service)
 
 
