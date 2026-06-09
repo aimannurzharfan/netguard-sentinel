@@ -92,7 +92,7 @@ _REMEDIATIONS: dict[str, str] = {
     "postgres": "upgrade PostgreSQL; restrict pg_hba.conf to trusted hosts",
     "mongodb": "upgrade MongoDB; enable authentication and bind to localhost",
     "redis": "upgrade Redis; bind to 127.0.0.1; enable requirepass",
-    "smb": "disable SMBv1; patch to current; restrict to internal networks only",
+    "smb": "disable the service (systemctl stop smbd; systemctl disable smbd) or restrict it to trusted internal networks; never expose SMB to untrusted networks",
     "rdp": "enable Network Level Authentication; restrict source IPs; use MFA",
     "telnet": "disable Telnet; replace with SSH",
 }
