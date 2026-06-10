@@ -22,12 +22,15 @@ load_dotenv()
 TOP_K = 10
 SIMILARITY_THRESHOLD = 0.6  # cosine similarity; lower distance = more similar
 
+# Named binds (not :1/:2): the embedding vector appears twice, and named binds
+# let it be supplied once. Positional binds would count each :1 occurrence
+# separately and raise DPY-4009 (3 placeholders, 2 values).
 SEARCH_SQL = """
 SELECT id, service_tag, cvss, epss, kev, description,
-       1 - VECTOR_DISTANCE(embedding, :1, COSINE) AS similarity
+       1 - VECTOR_DISTANCE(embedding, :vec, COSINE) AS similarity
 FROM cve_knowledge
-ORDER BY VECTOR_DISTANCE(embedding, :1, COSINE)
-FETCH FIRST :2 ROWS ONLY
+ORDER BY VECTOR_DISTANCE(embedding, :vec, COSINE)
+FETCH FIRST :top_k ROWS ONLY
 """
 
 
@@ -51,7 +54,7 @@ def lookup(service: str, top_k: int = TOP_K) -> list[dict]:
     vec = array.array("f", embed(service))
     con = _connect()
     cur = con.cursor()
-    cur.execute(SEARCH_SQL, [vec, top_k])
+    cur.execute(SEARCH_SQL, {"vec": vec, "top_k": top_k})
     if cur.description is None:
         cur.close()
         con.close()
