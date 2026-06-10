@@ -1,7 +1,7 @@
 """NetGuard Sentinel agent -- six-step reasoning pipeline (spec §6, §7).
 
 Layer 1 (local): deterministic Python pipeline for stages 1-3 (parse, enrich, score).
-Layer 2 (Foundry): Phi-4-reasoning handles stages 4-6 (prioritize, attack-path, remediation).
+Layer 2 (Foundry): Phi-4-mini-instruct handles stages 4-6 (prioritize, attack-path, remediation).
 When Foundry env vars are set, the model reasons over pre-enriched findings and returns
 narrative, MITRE mappings, and remediation text. The deterministic pipeline is always the
 fallback when Foundry is unconfigured or returns an error.
@@ -425,6 +425,8 @@ def _build_from_foundry(
         det = det_by_port.get(port)
         if det is None:
             continue  # model mentioned a port not in the scan; skip
+        if port in seen_ports:
+            continue  # model listed the same port twice; keep the first occurrence
 
         # Log any CVE IDs the model invented that were not in the enriched set.
         det_ids = {c.id for c in det.cves}
@@ -531,7 +533,7 @@ def triage(scan_input: str) -> TriageResult:
     """Run the six-step triage pipeline on a scan JSON string.
 
     Stages 1-3 (parse, enrich, score) always run as deterministic Python.
-    Stages 4-6 (prioritize, attack-path, remediation) are handed to Phi-4-reasoning
+    Stages 4-6 (prioritize, attack-path, remediation) are handed to Phi-4-mini-instruct
     on Azure AI Foundry when FOUNDRY_ENDPOINT / FOUNDRY_MODEL_DEPLOYMENT / FOUNDRY_API_KEY
     are set. Falls back to the local pipeline on any error.
     """
