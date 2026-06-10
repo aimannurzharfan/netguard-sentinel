@@ -16,6 +16,7 @@ import oracledb
 from dotenv import load_dotenv
 
 from data.embed import embed
+from tools.threat_intel import product_key
 
 load_dotenv()
 
@@ -50,7 +51,14 @@ def lookup(service: str, top_k: int = TOP_K) -> list[dict]:
     """Vector-search CVE records relevant to a service description.
 
     Returns list of dicts with keys: id, cvss, epss, kev, description, similarity.
+
+    Vector similarity alone can surface CVEs for a different product that
+    shares vendor words (e.g. Apache Struts for an Apache httpd query), so
+    results are also gated on an exact product-key match.
     """
+    svc_product = product_key(service)
+    if not svc_product:
+        return []
     vec = array.array("f", embed(service))
     con = _connect()
     cur = con.cursor()
@@ -68,6 +76,8 @@ def lookup(service: str, top_k: int = TOP_K) -> list[dict]:
     for row in rows:
         rec = dict(zip(cols, row))
         if rec.get("similarity", 0) < SIMILARITY_THRESHOLD:
+            continue
+        if product_key(str(rec.get("service_tag") or "")) != svc_product:
             continue
         results.append(
             {
