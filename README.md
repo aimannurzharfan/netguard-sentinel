@@ -67,16 +67,28 @@ CVSS contributes 30% (severity baseline). EPSS contributes 50% (real-world explo
                                                                            |
                                                                agent/agent.py (6-step)
                                                                            |
-                                                                 threat_intel_lookup()
-                                                                      |          |
-                                                             Layer 1: cache   Layer 2: Oracle 23ai
-                                                             data/cache/      AI Vector Search
-                                                             (NVD/EPSS/KEV)   (semantic query)
+                                              Stages 1-3 (always run in Python)
+                                                 threat_intel_lookup() per service
+                                                    |                    |
+                                          cache: data/cache/      Oracle 23ai
+                                          (NVD/EPSS/KEV JSON)     AI Vector Search
+                                                           |
+                                              composite scores computed (0-100)
+                                                           |
+                                        Stages 4-6: prioritize, attack-path, remediation
+                                                           |
+                                              +------------+------------+
+                                              |                         |
+                               Phi-4-reasoning on Azure           local deterministic
+                               AI Foundry (active brain)          Python pipeline
+                               foundry_client.run_reasoning()     (fallback)
 ```
 
-Two layers, one tool interface. The agent calls `threat_intel_lookup(service)` and gets the same CVE records back regardless of which backend is active. Switch with `THREAT_BACKEND=oracle` in `.env`.
+**Two-phase design.** Stages 1-3 (parse, enrich, score) always run as deterministic Python so CVE data and composite scores are always authoritative. Stages 4-6 (prioritize, attack-path reasoning, remediation narrative) are handled by Phi-4-reasoning on Azure AI Foundry when `FOUNDRY_ENDPOINT`, `FOUNDRY_MODEL_DEPLOYMENT`, and `FOUNDRY_API_KEY` are set in `.env`. The deterministic pipeline is the fallback when Foundry is unconfigured or returns an error, so the demo never breaks.
 
-**Microsoft Foundry** (the agent LLM runtime) wires in on Day 4 (~June 9) via `agent/foundry_client.py`. Until then the triage pipeline runs as deterministic local Python.
+Phi-4-reasoning reasons over the pre-enriched findings and returns contextual prioritization, MITRE ATT&CK attack-path analysis with a narrative, and per-finding remediation text. The model cannot change CVE scores or invent CVE IDs -- those come only from the deterministic pipeline.
+
+Switch threat enrichment backends with `THREAT_BACKEND=oracle` in `.env`.
 
 ## Quick start
 
@@ -160,9 +172,17 @@ THREAT_BACKEND=oracle python -m web.server
 
 Oracle defaults: user `system`, DSN `localhost:1521/FREEPDB1`. Only `ORACLE_PASSWORD` must be set in `.env`.
 
-## Wiring in Foundry (Day 4)
+## Enabling Foundry reasoning
 
-Open `agent/foundry_client.py`. It contains the stub and the exact implementation to paste in once `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_MODEL_DEPLOYMENT`, and `FOUNDRY_API_KEY` are in `.env`.
+Set three variables in `.env`:
+
+```
+FOUNDRY_ENDPOINT=https://<resource>.services.ai.azure.com/api/projects/<project>/openai/v1
+FOUNDRY_MODEL_DEPLOYMENT=Phi-4-reasoning
+FOUNDRY_API_KEY=<your key>
+```
+
+`FOUNDRY_PROJECT_ENDPOINT` is also accepted as a fallback -- the client appends `/openai/v1` automatically. With these set, `triage()` sends enriched findings to Phi-4-reasoning for stages 4-6 and falls back to the deterministic pipeline on any error.
 
 ## License
 

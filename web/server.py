@@ -16,6 +16,7 @@ import re
 from pathlib import Path
 
 from flask import Flask, Response, jsonify, request, send_file
+from flask.typing import ResponseReturnValue
 
 from agent.agent import triage
 from agent.schema import to_json
@@ -44,7 +45,7 @@ def serve_favicon() -> Response:
 
 
 @app.post("/scan")
-def run_scan() -> Response:
+def run_scan() -> ResponseReturnValue:
     """Scan a host then triage the findings. Returns a TriageResult JSON."""
     data = request.get_json(silent=True)
     if not data or "host" not in data:
@@ -77,12 +78,12 @@ def run_scan() -> Response:
         return Response(to_json(result), mimetype="application/json")
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 422
-    except Exception as exc:
-        return jsonify({"error": f"Scan failed: {exc}"}), 500
+    except Exception:
+        return jsonify({"error": "Scan failed due to an internal error."}), 500
 
 
 @app.post("/triage")
-def run_triage() -> Response:
+def run_triage() -> ResponseReturnValue:
     """Run the triage pipeline on pre-built scan JSON. Returns a TriageResult JSON."""
     data = request.get_json(silent=True)
     if not data or "scan" not in data:
@@ -97,8 +98,8 @@ def run_triage() -> Response:
         return Response(to_json(result), mimetype="application/json")
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 422
-    except Exception as exc:
-        return jsonify({"error": f"Triage failed: {exc}"}), 500
+    except Exception:
+        return jsonify({"error": "Triage failed due to an internal error."}), 500
 
 
 if __name__ == "__main__":
