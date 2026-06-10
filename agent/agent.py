@@ -1,18 +1,21 @@
 """NetGuard Sentinel agent -- six-step reasoning pipeline (spec §6, §7).
 
-Layer 1 (local): the pipeline runs as deterministic Python.
-    All six steps are implemented here without an LLM call.
-
-Layer 2 (Foundry, Day 4): uncomment the Foundry path at the bottom of triage().
-    agent/foundry_client.py is the only file that changes.
+Layer 1 (local): deterministic Python pipeline for stages 1-3 (parse, enrich, score).
+Layer 2 (Foundry): Phi-4-reasoning handles stages 4-6 (prioritize, attack-path, remediation).
+When Foundry env vars are set, the model reasons over pre-enriched findings and returns
+narrative, MITRE mappings, and remediation text. The deterministic pipeline is always the
+fallback when Foundry is unconfigured or returns an error.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
+import sys
+from typing import cast
 
-from agent import prompts
+from agent import foundry_client, prompts
 from agent.schema import (
     AttackPath,
     AttackStep,
@@ -251,7 +254,6 @@ def _build_attack_path(findings: list[Finding]) -> AttackPath | None:
     if not steps:
         return None
 
-    # Narrative
     entry = ordered[0]
     entry_name = f"{entry.service} on port {entry.port}"
     if len(ordered) == 1:
@@ -300,6 +302,227 @@ def _parse_scan(scan_json: str) -> dict:
 
 
 # --------------------------------------------------------------------------- #
+# Foundry integration helpers                                                   #
+# --------------------------------------------------------------------------- #
+
+
+def _safe_int(val: object, default: int = 0) -> int:
+    """Convert a value from untrusted model output to int, returning default on failure."""
+    if isinstance(val, int):
+        return val
+    if isinstance(val, (str, float)):
+        try:
+            return int(val)
+        except ValueError:
+            return default
+    return default
+
+
+def _to_enriched_dict(f: Finding) -> dict:
+    """Serialize a pre-scored Finding for the Foundry reasoning payload."""
+    return {
+        "port": f.port,
+        "service": f.service,
+        "version": f.version,
+        "bind_address": f.bind_address,
+        "cves": [
+            {
+                "id": c.id,
+                "cvss": c.cvss,
+                "epss": c.epss,
+                "kev": c.kev,
+                "composite_score": c.composite_score,
+                "summary": c.summary,
+            }
+            for c in f.cves
+        ],
+    }
+
+
+def _looks_like_triage(obj: object) -> bool:
+    """True when a decoded value is a TriageResult-shaped object (has a findings list)."""
+    if not isinstance(obj, dict):
+        return False
+    return isinstance(cast("dict[str, object]", obj).get("findings"), list)
+
+
+def parse_foundry_response(raw: str) -> dict | None:
+    """Locate and extract the last valid TriageResult-shaped JSON from Phi-4's output.
+
+    Phi-4-reasoning wraps its answer in noise: leading reasoning prose, <think>
+    chain-of-thought blocks, markdown code fences (sometimes around the *echoed
+    input* rather than the answer), and trailing commentary. It can also stall in
+    a degenerate repetition loop and never emit valid JSON at all.
+
+    Strategy, in order of reliability:
+      1. Remove <think>...</think> reasoning so its draft JSON cannot be mistaken
+         for the answer. Handle an orphan </think> (opening tag dropped by the
+         stream) by discarding everything up to it.
+      2. Prefer the LAST fenced block that parses to a TriageResult-shaped object;
+         a model that revises its answer puts the final version last.
+      3. Fall back to scanning every '{' and taking the last object that decodes
+         to a TriageResult shape -- covers unfenced output and missing close fences.
+
+    Returns None when no TriageResult-shaped JSON is found (caller then falls back
+    to the deterministic pipeline).
+    """
+    # 1. Drop chain-of-thought so a half-finished draft inside it is never picked.
+    text = re.sub(r"<think>[\s\S]*?</think>", "", raw, flags=re.IGNORECASE)
+    if "<think>" not in text.lower():
+        # Orphan close tag: the opening <think> was lost; keep only the answer.
+        idx = text.lower().rfind("</think>")
+        if idx != -1:
+            text = text[idx + len("</think>") :]
+    text = text.strip()
+
+    # 2. Prefer the last fenced block that parses to a triage shape.
+    fenced: dict | None = None
+    for m in re.finditer(r"```(?:json)?\s*([\s\S]*?)```", text):
+        try:
+            obj = json.loads(m.group(1).strip())
+        except json.JSONDecodeError:
+            continue
+        if _looks_like_triage(obj):
+            fenced = obj
+    if fenced is not None:
+        return fenced
+
+    # 3. Scan for raw JSON objects; keep the last one with a triage shape.
+    decoder = json.JSONDecoder()
+    last_obj: dict | None = None
+    for i, ch in enumerate(text):
+        if ch != "{":
+            continue
+        try:
+            obj, _ = decoder.raw_decode(text, i)
+        except json.JSONDecodeError:
+            continue
+        if _looks_like_triage(obj):
+            last_obj = obj
+
+    return last_obj
+
+
+def _build_from_foundry(
+    model_data: dict,
+    det_by_port: dict[int, Finding],
+    naive_cvss_order: list[NaiveCvssEntry],
+    tool_calls: list[ToolCall],
+    data_backend: str,
+    host: str,
+) -> TriageResult:
+    """Reconcile Foundry model output with the deterministic enrichment data.
+
+    The model contributes: prioritization order, rationale text, MITRE mappings,
+    remediation narrative, attack-path, host_risk_score, and summary.
+    The deterministic pipeline contributes: CVE data (always authoritative).
+    """
+    findings: list[Finding] = []
+    seen_ports: set[int] = set()
+
+    for mf in model_data.get("findings", []):
+        port = _safe_int(mf.get("port"), 0)
+        det = det_by_port.get(port)
+        if det is None:
+            continue  # model mentioned a port not in the scan; skip
+
+        # Log any CVE IDs the model invented that were not in the enriched set.
+        det_ids = {c.id for c in det.cves}
+        for mc in mf.get("cves", []):
+            cve_id = mc.get("id", "")
+            if cve_id and cve_id not in det_ids:
+                print(
+                    f"[netguard] Foundry invented CVE {cve_id} for port {port} -- dropped",
+                    file=sys.stderr,
+                )
+
+        # Parse MITRE from model output; fall back to deterministic if the model
+        # returned nothing usable.
+        mitre: list[MitreTechnique] = []
+        for m in mf.get("mitre", []):
+            technique = str(m.get("technique", "")).strip()
+            name = str(m.get("name", "")).strip()
+            tactic = str(m.get("tactic", "")).strip()
+            if technique and tactic:
+                mitre.append(
+                    MitreTechnique(technique=technique, name=name, tactic=tactic)
+                )
+        if not mitre:
+            mitre = det.mitre
+
+        findings.append(
+            Finding(
+                port=port,
+                service=det.service,
+                version=det.version,
+                bind_address=det.bind_address,
+                cves=det.cves,  # deterministic CVEs are always authoritative
+                contextual_severity=mf.get("contextual_severity")
+                or det.contextual_severity,
+                mitre=mitre,
+                rationale=mf.get("rationale") or det.rationale,
+                remediation=mf.get("remediation") or det.remediation,
+                remediation_command=mf.get("remediation_command")
+                or det.remediation_command,
+                priority=_safe_int(mf.get("priority"), 0),
+            )
+        )
+        seen_ports.add(port)
+
+    # Append any findings the model omitted, so nothing is silently dropped.
+    missing_priority = len(findings) + 1
+    for port, det in det_by_port.items():
+        if port not in seen_ports:
+            det.priority = missing_priority
+            findings.append(det)
+            missing_priority += 1
+
+    # Sort by model-assigned priority; use composite score to break ties.
+    findings.sort(
+        key=lambda f: (
+            f.priority if f.priority > 0 else 999,
+            -max((c.composite_score for c in f.cves), default=0),
+        )
+    )
+    for i, f in enumerate(findings):
+        f.priority = i + 1
+
+    # Parse attack path from model output.
+    attack_path: AttackPath | None = None
+    ap = model_data.get("attack_path")
+    if isinstance(ap, dict) and ap.get("narrative"):
+        steps = [
+            AttackStep(
+                finding_port=_safe_int(s.get("finding_port"), 0),
+                technique=str(s.get("technique", "")),
+                tactic=str(s.get("tactic", "")),
+            )
+            for s in ap.get("steps", [])
+            if isinstance(s, dict)
+        ]
+        attack_path = AttackPath(
+            narrative=str(ap.get("narrative", "")),
+            steps=steps,
+            break_point=str(ap.get("break_point", "")),
+        )
+
+    risk = _safe_int(model_data.get("host_risk_score"), _host_risk_score(findings))
+    risk = max(0, min(100, risk))
+    summary = str(model_data.get("summary", ""))
+
+    return TriageResult(
+        host=host,
+        host_risk_score=risk,
+        summary=summary,
+        findings=findings,
+        naive_cvss_order=naive_cvss_order,
+        attack_path=attack_path,
+        tool_calls=tool_calls,
+        threat_backend=f"foundry+{data_backend}",
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Public entry point                                                            #
 # --------------------------------------------------------------------------- #
 
@@ -307,15 +530,16 @@ def _parse_scan(scan_json: str) -> dict:
 def triage(scan_input: str) -> TriageResult:
     """Run the six-step triage pipeline on a scan JSON string.
 
-    Layer 1 (local): runs deterministically without a Foundry call.
-    Day 4: to use Foundry, uncomment the block at the end of this function
-    and implement agent/foundry_client.run_agent().
+    Stages 1-3 (parse, enrich, score) always run as deterministic Python.
+    Stages 4-6 (prioritize, attack-path, remediation) are handed to Phi-4-reasoning
+    on Azure AI Foundry when FOUNDRY_ENDPOINT / FOUNDRY_MODEL_DEPLOYMENT / FOUNDRY_API_KEY
+    are set. Falls back to the local pipeline on any error.
     """
     scan = _parse_scan(scan_input)
     host = scan.get("host", "unknown")
     ports = scan.get("ports", [])
     exposure = scan.get("exposure", "")
-    threat_backend = os.getenv("THREAT_BACKEND", "cache").lower()
+    data_backend = os.getenv("THREAT_BACKEND", "cache").lower()
 
     findings: list[Finding] = []
     tool_calls: list[ToolCall] = []
@@ -354,7 +578,6 @@ def triage(scan_input: str) -> TriageResult:
             )
         cves.sort(key=lambda c: c.composite_score, reverse=True)
 
-        # Stage 3: contextual severity for the finding
         top_score = cves[0].composite_score if cves else 0
         top_kev = any(c.kev for c in cves)
         severity = contextual_severity(top_score, top_kev)
@@ -377,7 +600,7 @@ def triage(scan_input: str) -> TriageResult:
             )
         )
 
-    # Stage 4: rank worst-first
+    # Stage 4 (local): rank worst-first by composite score
     findings.sort(
         key=lambda f: (
             max((c.composite_score for c in f.cves), default=0),
@@ -389,11 +612,10 @@ def triage(scan_input: str) -> TriageResult:
     for i, f in enumerate(findings):
         f.priority = i + 1
 
-    # Exposure override: elevate sensitive data-stores exposed to the internet;
-    # downgrade internal-only services on confirmed internal hosts.
+    # Exposure override: elevate internet-exposed data-stores; downgrade internal-only SMB.
     _apply_exposure_override(findings, exposure)
 
-    # Naive CVSS ranking (for UI comparison: what CVSS alone would tell you).
+    # Naive CVSS ranking for UI comparison.
     naive_cvss_order = sorted(
         [
             NaiveCvssEntry(
@@ -407,11 +629,40 @@ def triage(scan_input: str) -> TriageResult:
         reverse=True,
     )
 
-    # Stage 5: attack path
-    attack_path = _build_attack_path(findings)
+    # Stages 4-6 via Foundry (Phi-4-reasoning) when configured.
+    if foundry_client.is_configured():
+        try:
+            enriched_dicts = [_to_enriched_dict(f) for f in findings]
+            payload = prompts.build_foundry_payload(host, exposure, enriched_dicts)
+            raw_response = foundry_client.run_reasoning(
+                prompts.FOUNDRY_SYSTEM_PROMPT, payload
+            )
+            model_data = parse_foundry_response(raw_response)
+            if model_data is not None and isinstance(model_data.get("findings"), list):
+                det_by_port = {f.port: f for f in findings}
+                return _build_from_foundry(
+                    model_data,
+                    det_by_port,
+                    naive_cvss_order,
+                    tool_calls,
+                    data_backend,
+                    host,
+                )
+            else:
+                print(
+                    "[netguard] Foundry response contained no parseable JSON -- using local pipeline",
+                    file=sys.stderr,
+                )
+        except Exception as exc:
+            print(
+                f"[netguard] Foundry reasoning failed: {exc} -- using local pipeline",
+                file=sys.stderr,
+            )
 
-    # Stage 6: host risk score + summary
+    # Local fallback: stages 5-6
+    attack_path = _build_attack_path(findings)
     risk = _host_risk_score(findings)
+
     if risk >= 80:
         summary = f"Host {host} is at critical risk: multiple actively exploited vulnerabilities present."
     elif risk >= 60:
@@ -429,18 +680,6 @@ def triage(scan_input: str) -> TriageResult:
             f"Host {host}: no known vulnerabilities matched the detected services."
         )
 
-    # FOUNDRY SEAM (Day 4): replace the local pipeline above with:
-    #
-    #   from agent import foundry_client
-    #   raw = foundry_client.run_agent(
-    #       system_prompt=prompts.SYSTEM_PROMPT,
-    #       user_message=prompts.build_user_prompt(scan_input),
-    #   )
-    #   return parse_foundry_response(raw)  # implement parse_foundry_response()
-    #
-    # The local pipeline stays as a fallback if Foundry is not configured.
-    _ = prompts  # referenced above in the seam comment; suppress unused-import warning
-
     return TriageResult(
         host=host,
         host_risk_score=risk,
@@ -449,5 +688,5 @@ def triage(scan_input: str) -> TriageResult:
         naive_cvss_order=naive_cvss_order,
         attack_path=attack_path,
         tool_calls=tool_calls,
-        threat_backend=threat_backend,
+        threat_backend=data_backend,
     )
