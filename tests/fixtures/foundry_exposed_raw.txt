@@ -1,0 +1,108 @@
+User message: produce a JSON triage report for the host described below. Let me
+work through the ports. Apache httpd 2.4.49 on port 80 has CVE-2021-41773, which
+is on CISA KEV with EPSS 0.94 and composite 97, so it is the clear priority 1.
+
+<think>
+Ranking by composite_score descending:
+- [80] Apache httpd 2.4.49 -> 97 (KEV, CVE-2021-41773 path traversal -> RCE) = priority 1
+- [443] OpenSSL 1.0.1 -> 90 (KEV, CVE-2014-0160 Heartbleed) = priority 2
+- [21] vsftpd 2.3.4 -> 77 (CVE-2011-2523 backdoor) = priority 3
+- [22] OpenSSH 7.4 -> 62 (CVE-2023-38408) = priority 4
+Attack chain: initial access via the Apache path traversal (T1190), then the
+attacker reads memory via Heartbleed to harvest credentials, then reuses them
+over SSH for lateral movement. The earliest break point is patching Apache.
+A draft object like {"host": "10.0.0.5", "note": "still drafting"} is not final.
+</think>
+
+Here is the JSON triage report:
+
+```json
+{
+  "host": "10.0.0.5",
+  "host_risk_score": 88,
+  "summary": "Internet-exposed host with an actively exploited Apache path-traversal (CVE-2021-41773) and Heartbleed; patch Apache first to break the attack chain.",
+  "findings": [
+    {
+      "port": 80,
+      "service": "Apache httpd",
+      "version": "2.4.49",
+      "bind_address": "0.0.0.0",
+      "cves": [
+        {"id": "CVE-2021-41773", "composite_score": 97},
+        {"id": "CVE-2021-42013", "composite_score": 97}
+      ],
+      "contextual_severity": "critical",
+      "mitre": [
+        {"technique": "T1190", "name": "Exploit Public-Facing Application", "tactic": "Initial Access"}
+      ],
+      "rationale": "CVE-2021-41773 is on CISA KEV with EPSS 0.94 and composite 97; reachable from the internet on 0.0.0.0.",
+      "remediation": "Upgrade Apache httpd to 2.4.62 or later immediately; the 2.4.49/2.4.50 path-normalization flaw allows pre-auth RCE.",
+      "remediation_command": "sudo apt-get install --only-upgrade apache2",
+      "priority": 1
+    },
+    {
+      "port": 443,
+      "service": "OpenSSL",
+      "version": "1.0.1",
+      "bind_address": "0.0.0.0",
+      "cves": [
+        {"id": "CVE-2014-0160", "composite_score": 90}
+      ],
+      "contextual_severity": "critical",
+      "mitre": [
+        {"technique": "T1190", "name": "Exploit Public-Facing Application", "tactic": "Initial Access"}
+      ],
+      "rationale": "Heartbleed (CVE-2014-0160) leaks process memory including private keys and session material.",
+      "remediation": "Upgrade OpenSSL to 3.x, rotate all private keys and session secrets exposed by the vulnerable 1.0.1 build.",
+      "remediation_command": "sudo apt-get install --only-upgrade openssl",
+      "priority": 2
+    },
+    {
+      "port": 21,
+      "service": "vsftpd",
+      "version": "2.3.4",
+      "bind_address": "0.0.0.0",
+      "cves": [
+        {"id": "CVE-2011-2523", "composite_score": 77}
+      ],
+      "contextual_severity": "high",
+      "mitre": [
+        {"technique": "T1190", "name": "Exploit Public-Facing Application", "tactic": "Initial Access"}
+      ],
+      "rationale": "vsftpd 2.3.4 ships a backdoor that opens a root shell on port 6200.",
+      "remediation": "Remove the backdoored vsftpd 2.3.4 build; close port 21 or migrate to SFTP.",
+      "remediation_command": "sudo systemctl disable --now vsftpd",
+      "priority": 3
+    },
+    {
+      "port": 22,
+      "service": "OpenSSH",
+      "version": "7.4",
+      "bind_address": "0.0.0.0",
+      "cves": [
+        {"id": "CVE-2023-38408", "composite_score": 62}
+      ],
+      "contextual_severity": "high",
+      "mitre": [
+        {"technique": "T1021.004", "name": "Remote Services: SSH", "tactic": "Lateral Movement"}
+      ],
+      "rationale": "OpenSSH 7.4 is the most likely lateral-movement vector once credentials are harvested.",
+      "remediation": "Upgrade OpenSSH and enforce key-based authentication; disable password auth.",
+      "remediation_command": "sudo apt-get install --only-upgrade openssh-server",
+      "priority": 4
+    }
+  ],
+  "attack_path": {
+    "narrative": "An attacker reaches the internet-facing Apache httpd 2.4.49 on port 80 and exploits CVE-2021-41773 for unauthenticated path traversal leading to remote code execution (Initial Access). With a foothold they exploit Heartbleed on port 443 to read process memory and harvest credentials, then reuse those credentials over OpenSSH on port 22 to move laterally deeper into the network.",
+    "steps": [
+      {"finding_port": 80, "technique": "T1190", "tactic": "Initial Access"},
+      {"finding_port": 443, "technique": "T1190", "tactic": "Credential Access"},
+      {"finding_port": 22, "technique": "T1021.004", "tactic": "Lateral Movement"}
+    ],
+    "break_point": "Patching Apache httpd (port 80) to 2.4.62+ severs the chain at step 1, the highest-leverage fix."
+  },
+  "tool_calls": []
+}
+```
+
+That report ranks the actively exploited Apache flaw first and identifies Apache as the single break point that collapses the attacker's path.
