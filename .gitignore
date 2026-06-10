@@ -7,6 +7,12 @@
 _local/
 CLAUDE.md
 .claude/
+.mcp.json
+
+# Node tooling (UI ships as static HTML/JS in web/; npm files are dev-only)
+node_modules/
+package-lock.json
+package.json
 
 # Python
 __pycache__/
