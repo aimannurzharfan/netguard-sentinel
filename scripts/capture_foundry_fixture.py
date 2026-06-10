@@ -1,4 +1,4 @@
-"""One-shot: capture a single live Phi-4-reasoning response for offline testing.
+"""One-shot: capture a single live Phi-4-mini-instruct response for offline testing.
 
 Wraps foundry_client.run_reasoning so the exact raw text the real pipeline
 receives is teed to tests/fixtures/foundry_exposed_raw.txt, then runs triage()
@@ -41,7 +41,7 @@ def main() -> int:
     from agent.agent import triage
 
     scan = (ROOT / "samples" / "host_exposed.json").read_text(encoding="utf-8")
-    print("Making ONE live Phi-4-reasoning call on samples/host_exposed.json ...")
+    print("Making ONE live Phi-4-mini-instruct call on samples/host_exposed.json ...")
     result = triage(scan)
 
     if not captured:
