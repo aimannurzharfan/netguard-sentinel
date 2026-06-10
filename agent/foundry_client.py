@@ -1,4 +1,4 @@
-"""Foundry client: Phi-4-reasoning via the OpenAI-compatible endpoint.
+"""Foundry client: Phi-4-mini-instruct via the OpenAI-compatible endpoint.
 
 Set FOUNDRY_ENDPOINT (the /openai/v1 base URL), FOUNDRY_MODEL_DEPLOYMENT,
 and FOUNDRY_API_KEY in .env to activate.
@@ -12,10 +12,22 @@ from __future__ import annotations
 import os
 
 
+def _ensure_openai_path(base: str) -> str:
+    """Append the OpenAI-compatible route when the configured endpoint omits it.
+
+    Azure AI Foundry serves the OpenAI-compatible API under /openai/v1; a bare
+    resource host (https://<resource>.services.ai.azure.com) returns 404 without it.
+    Endpoints that already carry an /openai or /models path are left untouched.
+    """
+    if "/openai" in base or "/models" in base:
+        return base
+    return base + "/openai/v1"
+
+
 def _get_endpoint() -> str | None:
     """Return the resolved OpenAI-compatible base URL, or None if unconfigured."""
     if v := os.getenv("FOUNDRY_ENDPOINT"):
-        return v.rstrip("/")
+        return _ensure_openai_path(v.rstrip("/"))
     if project := os.getenv("FOUNDRY_PROJECT_ENDPOINT"):
         return project.rstrip("/") + "/openai/v1"
     return None
@@ -31,9 +43,21 @@ def is_configured() -> bool:
 
 
 def run_reasoning(system_prompt: str, payload: str) -> str:
-    """Submit enriched findings to Phi-4-reasoning and return the raw response text.
+    """Submit enriched findings to Phi-4-mini-instruct and return the raw response text.
 
     Connects via the OpenAI-compatible chat completions API on Azure AI Foundry.
+    Phi-4-mini-instruct emits a small structured object (no chain-of-thought), so a
+    single blocking call with temperature 0 and a modest token budget is enough.
+
+    The instructions (system_prompt: schema + few-shot) are delivered in the USER
+    turn, not the system role: this 3.8B model effectively ignores the system role
+    and anchors on the user message, so a schema placed there is followed reliably
+    while a system-role schema is not.
+
+    Requests JSON mode (response_format={"type": "json_object"}) first; if the
+    endpoint rejects it for this model (HTTP 400), retries without it and relies on
+    parse_foundry_response's defensive extraction.
+
     Raises RuntimeError when called without Foundry configured.
     """
     endpoint = _get_endpoint()
@@ -46,26 +70,31 @@ def run_reasoning(system_prompt: str, payload: str) -> str:
             "FOUNDRY_MODEL_DEPLOYMENT, and FOUNDRY_API_KEY in .env"
         )
 
-    from openai import OpenAI  # deferred: only required when Foundry is active
+    # deferred: only required when Foundry is active
+    from openai import BadRequestError, OpenAI
+    from openai.types.chat import ChatCompletionMessageParam
 
-    # timeout=300 keeps the connection open long enough for Phi-4-reasoning's
-    # chain-of-thought. stream=True avoids a blocking wait for the full response.
-    client = OpenAI(base_url=endpoint, api_key=api_key, timeout=300.0)
-    parts: list[str] = []
-    stream = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": payload},
-        ],
-        temperature=0.1,
-        max_tokens=16384,
-        stream=True,
-    )
-    for chunk in stream:
-        if not chunk.choices:
-            continue
-        delta = chunk.choices[0].delta.content
-        if delta:
-            parts.append(delta)
-    return "".join(parts)
+    client = OpenAI(base_url=endpoint, api_key=api_key, timeout=120.0)
+    # Schema + few-shot first, then the data, all in one user turn (see docstring).
+    messages: list[ChatCompletionMessageParam] = [
+        {"role": "user", "content": f"{system_prompt}\n\n=== Input ===\n{payload}"},
+    ]
+    # max_tokens=2000 leaves headroom so a full multi-finding object is never
+    # truncated mid-JSON (truncation would force the deterministic fallback).
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=0,
+            max_tokens=2000,
+            response_format={"type": "json_object"},
+        )
+    except BadRequestError:
+        # This model/endpoint does not support JSON mode; fall back to the parser.
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=0,
+            max_tokens=2000,
+        )
+    return response.choices[0].message.content or ""
