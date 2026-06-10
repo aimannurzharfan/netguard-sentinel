@@ -1,12 +1,10 @@
-"""Microsoft Foundry client -- wire this on Day 4 (~June 9) when Azure unlocks.
+"""Foundry client: Phi-4-reasoning via the OpenAI-compatible endpoint.
 
-SEAM: Everything in this module is intentionally left as stubs.
-The agent (agent.py) imports run_agent() from here. To wire Foundry:
-  1. Set FOUNDRY_PROJECT_ENDPOINT, FOUNDRY_MODEL_DEPLOYMENT, FOUNDRY_API_KEY in .env.
-  2. Replace the NotImplementedError body below with the AIProjectClient call.
-  3. No other file needs to change.
+Set FOUNDRY_ENDPOINT (the /openai/v1 base URL), FOUNDRY_MODEL_DEPLOYMENT,
+and FOUNDRY_API_KEY in .env to activate.
 
-SDK: azure-ai-projects >= 2.0.0 (unified AIProjectClient, bundles openai + azure-identity).
+FOUNDRY_PROJECT_ENDPOINT is accepted as a fallback -- /openai/v1 is appended
+automatically, so either variable works.
 """
 
 from __future__ import annotations
@@ -14,40 +12,60 @@ from __future__ import annotations
 import os
 
 
+def _get_endpoint() -> str | None:
+    """Return the resolved OpenAI-compatible base URL, or None if unconfigured."""
+    if v := os.getenv("FOUNDRY_ENDPOINT"):
+        return v.rstrip("/")
+    if project := os.getenv("FOUNDRY_PROJECT_ENDPOINT"):
+        return project.rstrip("/") + "/openai/v1"
+    return None
+
+
 def is_configured() -> bool:
-    """Return True if all three Foundry env vars are present."""
-    return all(
-        os.getenv(k)
-        for k in (
-            "FOUNDRY_PROJECT_ENDPOINT",
-            "FOUNDRY_MODEL_DEPLOYMENT",
-            "FOUNDRY_API_KEY",
-        )
+    """Return True when all required Foundry env vars are present."""
+    return (
+        bool(_get_endpoint())
+        and bool(os.getenv("FOUNDRY_MODEL_DEPLOYMENT"))
+        and bool(os.getenv("FOUNDRY_API_KEY"))
     )
 
 
-def run_agent(system_prompt: str, user_message: str) -> str:
-    """Submit a prompt to the Foundry agent and return the raw response text.
+def run_reasoning(system_prompt: str, payload: str) -> str:
+    """Submit enriched findings to Phi-4-reasoning and return the raw response text.
 
-    Day 4 implementation:
-        from azure.ai.projects import AIProjectClient
-        from azure.identity import DefaultAzureCredential
-
-        client = AIProjectClient(
-            endpoint=os.environ["FOUNDRY_PROJECT_ENDPOINT"],
-            credential=DefaultAzureCredential(),
-        )
-        agent = client.agents.create_agent(
-            model=os.environ["FOUNDRY_MODEL_DEPLOYMENT"],
-            instructions=system_prompt,
-        )
-        thread = client.agents.create_thread()
-        client.agents.create_message(thread_id=thread.id, role="user", content=user_message)
-        run = client.agents.create_and_process_run(thread_id=thread.id, agent_id=agent.id)
-        messages = client.agents.list_messages(thread_id=thread.id)
-        return messages.get_last_text_message_by_role("assistant").text.value
+    Connects via the OpenAI-compatible chat completions API on Azure AI Foundry.
+    Raises RuntimeError when called without Foundry configured.
     """
-    raise NotImplementedError(
-        f"Foundry not wired (prompt {len(system_prompt)}c / message {len(user_message)}c). "
-        "Set FOUNDRY_PROJECT_ENDPOINT, FOUNDRY_MODEL_DEPLOYMENT, and FOUNDRY_API_KEY in .env."
+    endpoint = _get_endpoint()
+    api_key = os.getenv("FOUNDRY_API_KEY")
+    model = os.getenv("FOUNDRY_MODEL_DEPLOYMENT")
+
+    if not (endpoint and api_key and model):
+        raise RuntimeError(
+            "Foundry not configured -- set FOUNDRY_ENDPOINT (or FOUNDRY_PROJECT_ENDPOINT), "
+            "FOUNDRY_MODEL_DEPLOYMENT, and FOUNDRY_API_KEY in .env"
+        )
+
+    from openai import OpenAI  # deferred: only required when Foundry is active
+
+    # timeout=300 keeps the connection open long enough for Phi-4-reasoning's
+    # chain-of-thought. stream=True avoids a blocking wait for the full response.
+    client = OpenAI(base_url=endpoint, api_key=api_key, timeout=300.0)
+    parts: list[str] = []
+    stream = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": payload},
+        ],
+        temperature=0.1,
+        max_tokens=16384,
+        stream=True,
     )
+    for chunk in stream:
+        if not chunk.choices:
+            continue
+        delta = chunk.choices[0].delta.content
+        if delta:
+            parts.append(delta)
+    return "".join(parts)
