@@ -71,7 +71,7 @@ export function FindingCard({ finding }: { finding: Finding }) {
         </ul>
       ) : (
         <p className="mt-3 text-[0.8rem] text-muted-foreground">
-          No CVEs matched for this service version.
+          No known vulnerabilities match this service version.
         </p>
       )}
 

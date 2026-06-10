@@ -186,7 +186,18 @@ def _apply_exposure_override(findings: list[Finding], exposure: str) -> None:
         f.priority = i + 1
 
 
-def _map_mitre(service: str) -> list[MitreTechnique]:
+# Fallback for services with no matching CVEs: the service is exposed but has
+# no known exploitable vulnerability, so the only applicable technique is
+# discovery of the service itself, never an exploitation or obfuscation one.
+_NO_CVE_MITRE = MitreTechnique(
+    technique="T1046", name="Network Service Discovery", tactic="Discovery"
+)
+
+
+def _map_mitre(service: str, has_cves: bool) -> list[MitreTechnique]:
+    """Deterministic MITRE ATT&CK mapping; the model never assigns techniques."""
+    if not has_cves:
+        return [_NO_CVE_MITRE]
     svc_lower = service.lower()
     techniques: list[MitreTechnique] = []
     seen: set[str] = set()
@@ -213,7 +224,7 @@ def _remediation_text(service: str, cves: list[CVE]) -> str:
 
 def _rationale(cves: list[CVE]) -> str:
     if not cves:
-        return "no known CVEs found for this version"
+        return "No known vulnerabilities match this service version."
     top = max(cves, key=lambda c: c.composite_score)
     parts = []
     if top.kev:
@@ -283,6 +294,20 @@ def _build_attack_path(findings: list[Finding]) -> AttackPath | None:
     return AttackPath(narrative=narrative, steps=steps, break_point=break_point)
 
 
+def _summary_text(host: str, risk: int) -> str:
+    if risk >= 80:
+        return f"Host {host} is at critical risk: multiple actively exploited vulnerabilities present."
+    if risk >= 60:
+        return (
+            f"Host {host} has high risk: exploitable services require urgent patching."
+        )
+    if risk >= 35:
+        return f"Host {host} has moderate risk: some findings need attention."
+    if risk > 0:
+        return f"Host {host} has low risk: no actively exploited vulnerabilities found."
+    return f"Host {host}: no known vulnerabilities matched the detected services."
+
+
 def _host_risk_score(findings: list[Finding]) -> int:
     scores = sorted(
         (max((c.composite_score for c in f.cves), default=0) for f in findings),
@@ -304,6 +329,8 @@ def _parse_scan(scan_json: str) -> dict:
 # --------------------------------------------------------------------------- #
 # Foundry integration helpers                                                   #
 # --------------------------------------------------------------------------- #
+
+_CVE_RE = re.compile(r"CVE-\d{4}-\d{4,}", re.IGNORECASE)
 
 
 def _safe_int(val: object, default: int = 0) -> int:
@@ -349,7 +376,7 @@ def _looks_like_triage(obj: object) -> bool:
 def parse_foundry_response(raw: str) -> dict | None:
     """Locate and extract the last valid TriageResult-shaped JSON from Phi-4's output.
 
-    Phi-4-reasoning wraps its answer in noise: leading reasoning prose, <think>
+    Phi-4 models can wrap the answer in noise: leading reasoning prose, <think>
     chain-of-thought blocks, markdown code fences (sometimes around the *echoed
     input* rather than the answer), and trailing commentary. It can also stall in
     a degenerate repetition loop and never emit valid JSON at all.
@@ -413,10 +440,28 @@ def _build_from_foundry(
 ) -> TriageResult:
     """Reconcile Foundry model output with the deterministic enrichment data.
 
-    The model contributes: prioritization order, rationale text, MITRE mappings,
+    The model contributes: prioritization order, rationale text,
     remediation narrative, attack-path, host_risk_score, and summary.
-    The deterministic pipeline contributes: CVE data (always authoritative).
+    The deterministic pipeline contributes: CVE data and MITRE techniques
+    (always authoritative). Model prose that names a CVE outside the host's
+    enriched CVE set is replaced with the deterministic text for that field.
     """
+    host_cve_ids = {c.id for det in det_by_port.values() for c in det.cves}
+
+    def _clean(model_text: object, fallback: str) -> str:
+        """Use model prose unless it references a CVE not enriched for this host."""
+        text = str(model_text or "").strip()
+        if not text:
+            return fallback
+        if any(m.upper() not in host_cve_ids for m in _CVE_RE.findall(text)):
+            print(
+                "[netguard] Foundry prose referenced a CVE outside the host's "
+                "enriched set -- replaced with deterministic text",
+                file=sys.stderr,
+            )
+            return fallback
+        return text
+
     findings: list[Finding] = []
     seen_ports: set[int] = set()
 
@@ -438,20 +483,6 @@ def _build_from_foundry(
                     file=sys.stderr,
                 )
 
-        # Parse MITRE from model output; fall back to deterministic if the model
-        # returned nothing usable.
-        mitre: list[MitreTechnique] = []
-        for m in mf.get("mitre", []):
-            technique = str(m.get("technique", "")).strip()
-            name = str(m.get("name", "")).strip()
-            tactic = str(m.get("tactic", "")).strip()
-            if technique and tactic:
-                mitre.append(
-                    MitreTechnique(technique=technique, name=name, tactic=tactic)
-                )
-        if not mitre:
-            mitre = det.mitre
-
         findings.append(
             Finding(
                 port=port,
@@ -461,11 +492,14 @@ def _build_from_foundry(
                 cves=det.cves,  # deterministic CVEs are always authoritative
                 contextual_severity=mf.get("contextual_severity")
                 or det.contextual_severity,
-                mitre=mitre,
-                rationale=mf.get("rationale") or det.rationale,
-                remediation=mf.get("remediation") or det.remediation,
-                remediation_command=mf.get("remediation_command")
-                or det.remediation_command,
+                # Deterministic MITRE is always authoritative; derive it when
+                # the enriched finding arrived without one.
+                mitre=det.mitre or _map_mitre(det.service, bool(det.cves)),
+                rationale=_clean(mf.get("rationale"), det.rationale),
+                remediation=_clean(mf.get("remediation"), det.remediation),
+                remediation_command=_clean(
+                    mf.get("remediation_command"), det.remediation_command
+                ),
                 priority=_safe_int(mf.get("priority"), 0),
             )
         )
@@ -489,28 +523,46 @@ def _build_from_foundry(
     for i, f in enumerate(findings):
         f.priority = i + 1
 
-    # Parse attack path from model output.
+    # Parse attack path from model output. Steps are restricted to ports with
+    # real CVEs, and each step's technique must come from the deterministic
+    # MITRE map for that finding -- the model never assigns techniques.
     attack_path: AttackPath | None = None
     ap = model_data.get("attack_path")
     if isinstance(ap, dict) and ap.get("narrative"):
-        steps = [
-            AttackStep(
-                finding_port=_safe_int(s.get("finding_port"), 0),
-                technique=str(s.get("technique", "")),
-                tactic=str(s.get("tactic", "")),
+        steps: list[AttackStep] = []
+        for s in ap.get("steps", []):
+            if not isinstance(s, dict):
+                continue
+            step_port = _safe_int(s.get("finding_port"), 0)
+            step_det = det_by_port.get(step_port)
+            if step_det is None or not step_det.cves:
+                continue
+            det_mitre = step_det.mitre or _map_mitre(step_det.service, True)
+            if not det_mitre:
+                continue
+            by_id = {m.technique: m for m in det_mitre}
+            chosen = by_id.get(str(s.get("technique", "")))
+            if chosen is None:
+                chosen = min(det_mitre, key=lambda m: _TACTIC_ORDER.get(m.tactic, 99))
+            steps.append(
+                AttackStep(
+                    finding_port=step_port,
+                    technique=chosen.technique,
+                    tactic=chosen.tactic,
+                )
             )
-            for s in ap.get("steps", [])
-            if isinstance(s, dict)
-        ]
-        attack_path = AttackPath(
-            narrative=str(ap.get("narrative", "")),
-            steps=steps,
-            break_point=str(ap.get("break_point", "")),
-        )
+        narrative = _clean(ap.get("narrative"), "")
+        break_point = _clean(ap.get("break_point"), "")
+        if steps and narrative:
+            attack_path = AttackPath(
+                narrative=narrative, steps=steps, break_point=break_point
+            )
+    if attack_path is None:
+        attack_path = _build_attack_path(findings)
 
     risk = _safe_int(model_data.get("host_risk_score"), _host_risk_score(findings))
     risk = max(0, min(100, risk))
-    summary = str(model_data.get("summary", ""))
+    summary = _clean(model_data.get("summary"), _summary_text(host, risk))
 
     return TriageResult(
         host=host,
@@ -584,7 +636,7 @@ def triage(scan_input: str) -> TriageResult:
         top_kev = any(c.kev for c in cves)
         severity = contextual_severity(top_score, top_kev)
 
-        mitre = _map_mitre(service)
+        mitre = _map_mitre(service, bool(cves))
         findings.append(
             Finding(
                 port=port_num,
@@ -631,7 +683,7 @@ def triage(scan_input: str) -> TriageResult:
         reverse=True,
     )
 
-    # Stages 4-6 via Foundry (Phi-4-reasoning) when configured.
+    # Stages 4-6 via Foundry (Phi-4-mini-instruct) when configured.
     if foundry_client.is_configured():
         try:
             enriched_dicts = [_to_enriched_dict(f) for f in findings]
@@ -664,23 +716,7 @@ def triage(scan_input: str) -> TriageResult:
     # Local fallback: stages 5-6
     attack_path = _build_attack_path(findings)
     risk = _host_risk_score(findings)
-
-    if risk >= 80:
-        summary = f"Host {host} is at critical risk: multiple actively exploited vulnerabilities present."
-    elif risk >= 60:
-        summary = (
-            f"Host {host} has high risk: exploitable services require urgent patching."
-        )
-    elif risk >= 35:
-        summary = f"Host {host} has moderate risk: some findings need attention."
-    elif risk > 0:
-        summary = (
-            f"Host {host} has low risk: no actively exploited vulnerabilities found."
-        )
-    else:
-        summary = (
-            f"Host {host}: no known vulnerabilities matched the detected services."
-        )
+    summary = _summary_text(host, risk)
 
     return TriageResult(
         host=host,
