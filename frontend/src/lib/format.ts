@@ -90,7 +90,9 @@ export function backendLabel(result: TriageResult): string {
   const store = backend.includes("oracle")
     ? "Oracle 23ai vector search"
     : "local threat cache"
-  return reasoned ? `Phi-4 reasoning over ${store}` : store
+  return reasoned
+    ? `Phi-4-mini-instruct via Microsoft Foundry (threat data from ${store})`
+    : store
 }
 
 export function epssPct(epss: number): number {
