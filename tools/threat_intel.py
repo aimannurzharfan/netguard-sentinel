@@ -22,6 +22,49 @@ from pathlib import Path
 _CACHE_FILE = Path(__file__).parent.parent / "data" / "cache" / "cves.json"
 _cache: list[dict] | None = None
 
+# Ordered (substring, product_key) patterns; the first hit wins, so specific
+# product names come before the vendor words they contain ("struts" before
+# "apache"). Bare protocol names (SSH, HTTP) get their own keys so a generic
+# banner never matches a specific product's CVEs.
+_PRODUCT_PATTERNS: tuple[tuple[str, str], ...] = (
+    ("struts", "apache_struts"),
+    ("tomcat", "apache_tomcat"),
+    ("httpd", "apache_httpd"),
+    ("apache", "apache_httpd"),
+    ("openssh", "openssh"),
+    ("vsftpd", "vsftpd"),
+    ("proftpd", "proftpd"),
+    ("openssl", "openssl"),
+    ("nginx", "nginx"),
+    ("mysql", "mysql"),
+    ("postgres", "postgresql"),
+    ("mongodb", "mongodb"),
+    ("redis", "redis"),
+    ("elasticsearch", "elasticsearch"),
+    ("samba", "smb"),
+    ("smb", "smb"),
+    ("rdp", "rdp"),
+    ("telnet", "telnet"),
+    ("vnc", "vnc"),
+    ("ftp", "ftp"),
+    ("ssh", "ssh"),
+    ("https", "https"),
+    ("http", "http"),
+)
+
+
+def product_key(service: str) -> str:
+    """Normalize a service string to a precise product key (e.g. 'apache_httpd').
+
+    Returns "" for unrecognized products: an unknown service must match no
+    CVEs rather than fall back to fuzzy matching.
+    """
+    s = service.lower()
+    for needle, key in _PRODUCT_PATTERNS:
+        if needle in s:
+            return key
+    return ""
+
 
 def _load_cache() -> list[dict]:
     global _cache
@@ -36,16 +79,20 @@ def _load_cache() -> list[dict]:
 
 
 def _cache_lookup(service: str) -> list[dict]:
-    """Match CVEs by service tag prefix (case-insensitive)."""
-    service_lower = service.lower()
+    """Match CVEs whose product key equals the scanned service's product key.
+
+    Product-exact matching: "Apache httpd" never matches an "Apache Struts"
+    CVE on the shared vendor word. Records without an explicit product field
+    derive one from their service_tag.
+    """
+    svc_product = product_key(service)
+    if not svc_product:
+        return []
     records = _load_cache()
     matched = []
     for rec in records:
-        tag = rec.get("service_tag", "").lower()
-        # Match if the service string contains any word from the tag or vice versa
-        tag_words = set(tag.split())
-        svc_words = set(service_lower.split())
-        if tag_words & svc_words:
+        rec_product = rec.get("product") or product_key(rec.get("service_tag", ""))
+        if rec_product == svc_product:
             matched.append(
                 {
                     "id": rec["id"],

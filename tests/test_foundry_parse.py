@@ -1,8 +1,8 @@
-"""Offline tests for parsing real-shaped Phi-4-reasoning output.
+"""Offline tests for parsing real-shaped Phi-4 model output.
 
 These run with no network and are never skipped. They exercise the parser and
 the model/deterministic merge against fixtures captured from (or representative
-of) live Phi-4-reasoning output:
+of) live Phi-4 output:
 
 - foundry_exposed_raw.txt: a successful response in the real model shape --
   leading reasoning prose, a <think> block, a fenced final JSON, trailing prose.

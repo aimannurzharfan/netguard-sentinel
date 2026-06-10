@@ -33,7 +33,7 @@ def test_all_technique_ids_in_allowlist():
 
 
 def test_database_service_maps_to_initial_access_not_persistence():
-    techniques = _map_mitre("MySQL 8.0")
+    techniques = _map_mitre("MySQL 8.0", has_cves=True)
     assert techniques, "Expected at least one technique for 'MySQL 8.0'"
     for t in techniques:
         assert t.technique == "T1190", (
@@ -41,4 +41,22 @@ def test_database_service_maps_to_initial_access_not_persistence():
         )
         assert t.tactic != "Persistence", (
             f"MySQL should not map to Persistence tactic, got {t.tactic}"
+        )
+
+
+def test_no_cve_service_maps_to_network_service_discovery():
+    """A service with no matching CVEs is exposure, not exploitation: T1046 only."""
+    for service in ("MySQL 8.0", "SMB", "UnknownService 1.0"):
+        techniques = _map_mitre(service, has_cves=False)
+        assert len(techniques) == 1, (
+            f"No-CVE service '{service}' should map to exactly one technique"
+        )
+        t = techniques[0]
+        assert t.technique == "T1046", (
+            f"Expected T1046 for '{service}', got {t.technique}"
+        )
+        assert t.name == "Network Service Discovery"
+        assert t.tactic == "Discovery"
+        assert not t.technique.startswith("T1027"), (
+            "Obfuscation techniques must never appear on no-CVE services"
         )

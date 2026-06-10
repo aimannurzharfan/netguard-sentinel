@@ -9,18 +9,20 @@ CLAUDE.md
 .claude/
 .mcp.json
 
-# Node tooling (UI ships as static HTML/JS in web/; npm files are dev-only)
+# Node tooling. node_modules is ignored everywhere; only the repo-root
+# package.json/lock (MCP dev tooling) are ignored. The frontend/ app keeps its
+# own package.json and lockfile so the SPA can be reinstalled and rebuilt.
 node_modules/
-package-lock.json
-package.json
+/package-lock.json
+/package.json
 
-# Python
+# Python (anchored to repo root so the built SPA in web/dist is not ignored)
 __pycache__/
 *.py[cod]
 *.egg-info/
 .eggs/
-build/
-dist/
+/build/
+/dist/
 .venv*/
 venv/
 env/

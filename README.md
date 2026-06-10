@@ -79,14 +79,14 @@ CVSS contributes 30% (severity baseline). EPSS contributes 50% (real-world explo
                                                            |
                                               +------------+------------+
                                               |                         |
-                               Phi-4-reasoning on Azure           local deterministic
-                               AI Foundry (active brain)          Python pipeline
+                               Phi-4-mini-instruct via            local deterministic
+                               Microsoft Foundry (active brain)   Python pipeline
                                foundry_client.run_reasoning()     (fallback)
 ```
 
-**Two-phase design.** Stages 1-3 (parse, enrich, score) always run as deterministic Python so CVE data and composite scores are always authoritative. Stages 4-6 (prioritize, attack-path reasoning, remediation narrative) are handled by Phi-4-reasoning on Azure AI Foundry when `FOUNDRY_ENDPOINT`, `FOUNDRY_MODEL_DEPLOYMENT`, and `FOUNDRY_API_KEY` are set in `.env`. The deterministic pipeline is the fallback when Foundry is unconfigured or returns an error, so the demo never breaks.
+**Two-phase design.** Stages 1-3 (parse, enrich, score) always run as deterministic Python so CVE data and composite scores are always authoritative. Stages 4-6 (prioritize, attack-path reasoning, remediation narrative) are handled by Phi-4-mini-instruct via Microsoft Foundry when `FOUNDRY_ENDPOINT`, `FOUNDRY_MODEL_DEPLOYMENT`, and `FOUNDRY_API_KEY` are set in `.env`. The deterministic pipeline is the fallback when Foundry is unconfigured or returns an error, so the demo never breaks.
 
-Phi-4-reasoning reasons over the pre-enriched findings and returns contextual prioritization, MITRE ATT&CK attack-path analysis with a narrative, and per-finding remediation text. The model cannot change CVE scores or invent CVE IDs -- those come only from the deterministic pipeline.
+Phi-4-mini-instruct reasons over the pre-enriched findings and returns contextual prioritization, an attack-path narrative, and per-finding remediation text. The model cannot change CVE scores, invent CVE IDs, or assign MITRE ATT&CK techniques -- those come only from the deterministic pipeline.
 
 Switch threat enrichment backends with `THREAT_BACKEND=oracle` in `.env`.
 
@@ -178,11 +178,11 @@ Set three variables in `.env`:
 
 ```
 FOUNDRY_ENDPOINT=https://<resource>.services.ai.azure.com/api/projects/<project>/openai/v1
-FOUNDRY_MODEL_DEPLOYMENT=Phi-4-reasoning
+FOUNDRY_MODEL_DEPLOYMENT=Phi-4-mini-instruct
 FOUNDRY_API_KEY=<your key>
 ```
 
-`FOUNDRY_PROJECT_ENDPOINT` is also accepted as a fallback -- the client appends `/openai/v1` automatically. With these set, `triage()` sends enriched findings to Phi-4-reasoning for stages 4-6 and falls back to the deterministic pipeline on any error.
+`FOUNDRY_PROJECT_ENDPOINT` is also accepted as a fallback -- the client appends `/openai/v1` automatically. With these set, `triage()` sends enriched findings to Phi-4-mini-instruct for stages 4-6 and falls back to the deterministic pipeline on any error.
 
 ## License
 

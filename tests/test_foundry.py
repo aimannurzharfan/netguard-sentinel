@@ -1,4 +1,4 @@
-"""Tests for the Foundry (Phi-4-reasoning) integration path.
+"""Tests for the Foundry (Phi-4-mini-instruct) integration path.
 
 Guarded by requires_foundry so they only execute when FOUNDRY_ENDPOINT (or
 FOUNDRY_PROJECT_ENDPOINT), FOUNDRY_MODEL_DEPLOYMENT, and FOUNDRY_API_KEY are set.

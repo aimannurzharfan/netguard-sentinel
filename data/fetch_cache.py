@@ -24,18 +24,20 @@ NVD_API = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 EPSS_API = "https://api.first.org/data/v1/epss"
 KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
 
-# CVEs to cache for the demo, keyed by service tag.
-DEMO_TARGETS: dict[str, list[str]] = {
-    "Apache httpd 2.4.49": ["CVE-2021-41773", "CVE-2021-42013"],
-    "vsftpd 2.3.4": ["CVE-2011-2523"],
-    "OpenSSH 7.4": ["CVE-2023-38408", "CVE-2016-0777"],
-    "OpenSSL 1.0.1": ["CVE-2014-0160"],
-    "Apache Struts 2.3.5": ["CVE-2017-5638"],
-    "ProFTPD 1.3.3": ["CVE-2010-4221"],
-    "nginx 1.18.0": ["CVE-2021-23017"],
-    "OpenSSH 8.9": [],
-    "nginx 1.24.0": [],
-    "Apache httpd 2.4.54": [],
+# CVEs to cache for the demo, keyed by service tag. Each entry carries the
+# precise product key the lookup matches on (tools/threat_intel.product_key);
+# matching is product-exact, never token overlap.
+DEMO_TARGETS: dict[str, tuple[str, list[str]]] = {
+    "Apache httpd 2.4.49": ("apache_httpd", ["CVE-2021-41773", "CVE-2021-42013"]),
+    "vsftpd 2.3.4": ("vsftpd", ["CVE-2011-2523"]),
+    "OpenSSH 7.4": ("openssh", ["CVE-2023-38408", "CVE-2016-0777"]),
+    "OpenSSL 1.0.1": ("openssl", ["CVE-2014-0160"]),
+    "Apache Struts 2.3.5": ("apache_struts", ["CVE-2017-5638"]),
+    "ProFTPD 1.3.3": ("proftpd", ["CVE-2010-4221"]),
+    "nginx 1.18.0": ("nginx", ["CVE-2021-23017"]),
+    "OpenSSH 8.9": ("openssh", []),
+    "nginx 1.24.0": ("nginx", []),
+    "Apache httpd 2.4.54": ("apache_httpd", []),
 }
 
 
@@ -109,7 +111,7 @@ def build_cache() -> None:
     print(f"  {len(kev)} known-exploited CVEs")
 
     all_cve_ids: list[str] = []
-    for ids in DEMO_TARGETS.values():
+    for _product, ids in DEMO_TARGETS.values():
         all_cve_ids.extend(ids)
     all_cve_ids = list(dict.fromkeys(all_cve_ids))
 
@@ -117,7 +119,7 @@ def build_cache() -> None:
     epss_scores = fetch_epss(all_cve_ids)
 
     records: list[dict] = []
-    for service_tag, cve_ids in DEMO_TARGETS.items():
+    for service_tag, (product, cve_ids) in DEMO_TARGETS.items():
         for cve_id in cve_ids:
             print(f"  NVD: {cve_id}")
             nvd = fetch_nvd(cve_id)
@@ -127,6 +129,7 @@ def build_cache() -> None:
                 {
                     "id": cve_id,
                     "service_tag": service_tag,
+                    "product": product,
                     "cvss": nvd["cvss"],
                     "epss": epss_scores.get(cve_id, 0.0),
                     "kev": cve_id in kev,
