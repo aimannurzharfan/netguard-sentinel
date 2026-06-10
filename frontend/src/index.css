@@ -1,0 +1,253 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ------------------------------------------------------------------ */
+/* NetGuard Sentinel - tactical SOC command-deck theme                 */
+/* Near-black green-charcoal field, single teal "sentinel" signal,     */
+/* monospace data with a Chakra Petch tactical display face.           */
+/* ------------------------------------------------------------------ */
+:root {
+  --radius: 0.25rem;
+
+  /* Core surfaces */
+  --background: #090d0c;
+  --foreground: #e9eff0;
+  --card: #101715;
+  --card-foreground: #e9eff0;
+  --popover: #0d1311;
+  --popover-foreground: #e9eff0;
+
+  /* Sentinel signal (primary) */
+  --primary: #21e0c4;
+  --primary-foreground: #04241f;
+
+  --secondary: #18211e;
+  --secondary-foreground: #cfdad7;
+  --muted: #141b19;
+  --muted-foreground: #93a39e;
+  --accent: #15211d;
+  --accent-foreground: #d7faf2;
+
+  --destructive: #ff6b62;
+  --destructive-foreground: #2a1110;
+
+  --border: #243430;
+  --input: #2c3b37;
+  --ring: #2ff0d4;
+
+  /* Severity scale (foreground / soft background pairs) */
+  --critical: #ff7a72;
+  --critical-bg: #2c1311;
+  --high: #ffb061;
+  --high-bg: #2b1d0e;
+  --medium: #ffdc63;
+  --medium-bg: #272206;
+  --low: #5fdc8c;
+  --low-bg: #0e2419;
+  --signal: #21e0c4;
+  --signal-bg: #0a2722;
+  --kev: #ff6b62;
+  --kev-bg: #311210;
+
+  /* Charts (kept for shadcn primitives that reference them) */
+  --chart-1: #21e0c4;
+  --chart-2: #ffb061;
+  --chart-3: #ff7a72;
+  --chart-4: #5fdc8c;
+  --chart-5: #6fb2ff;
+
+  --sidebar: #0d1311;
+  --sidebar-foreground: #e9eff0;
+  --sidebar-primary: #21e0c4;
+  --sidebar-primary-foreground: #04241f;
+  --sidebar-accent: #15211d;
+  --sidebar-accent-foreground: #d7faf2;
+  --sidebar-border: #243430;
+  --sidebar-ring: #2ff0d4;
+
+  --font-display: "Chakra Petch", "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Code", monospace;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-critical: var(--critical);
+  --color-critical-bg: var(--critical-bg);
+  --color-high: var(--high);
+  --color-high-bg: var(--high-bg);
+  --color-medium: var(--medium);
+  --color-medium-bg: var(--medium-bg);
+  --color-low: var(--low);
+  --color-low-bg: var(--low-bg);
+  --color-signal: var(--signal);
+  --color-signal-bg: var(--signal-bg);
+  --color-kev: var(--kev);
+  --color-kev-bg: var(--kev-bg);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --font-sans: var(--font-mono);
+  --font-mono: var(--font-mono);
+  --font-display: var(--font-display);
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 6px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/60;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground font-mono antialiased;
+    font-feature-settings: "ss01", "zero";
+    /* Layered SOC field: faint top glow + tactical grid + vignette. */
+    background-image:
+      radial-gradient(
+        120% 80% at 50% -10%,
+        color-mix(in oklab, var(--signal) 9%, transparent) 0%,
+        transparent 55%
+      ),
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size:
+      100% 100%,
+      44px 44px,
+      44px 44px;
+    background-position:
+      center top,
+      center top,
+      center top;
+    background-attachment: fixed;
+  }
+
+  /* Tactical grid is decorative; dim it so content stays dominant. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(
+        100% 60% at 50% 40%,
+        transparent 60%,
+        color-mix(in oklab, var(--background) 86%, black) 100%
+      );
+    z-index: 0;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--signal) 32%, transparent);
+    color: var(--foreground);
+  }
+
+  button,
+  [role="button"],
+  a,
+  summary,
+  input,
+  textarea {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  /* Visible, high-contrast focus for keyboard users everywhere. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* HUD corner brackets: the signature framing on primary panels. */
+  .hud-frame {
+    position: relative;
+  }
+  .hud-frame::before,
+  .hud-frame::after {
+    content: "";
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border-color: color-mix(in oklab, var(--signal) 70%, transparent);
+    border-style: solid;
+    pointer-events: none;
+  }
+  .hud-frame::before {
+    top: -1px;
+    left: -1px;
+    border-width: 2px 0 0 2px;
+  }
+  .hud-frame::after {
+    bottom: -1px;
+    right: -1px;
+    border-width: 0 2px 2px 0;
+  }
+
+  .tactical-label {
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    font-weight: 600;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

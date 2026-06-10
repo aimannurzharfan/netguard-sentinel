@@ -3,7 +3,8 @@
 Run from the repo root:
     python -m web.server
 
-Serves web/index.html at / and exposes two JSON endpoints:
+Serves the built React SPA (web/dist, produced by `npm run build` in frontend/)
+at / with a static + SPA fallback route, and exposes two JSON endpoints:
   POST /scan    -- scans a target host then runs the triage pipeline
   POST /triage  -- runs the triage pipeline on a pre-built scan JSON
 """
@@ -15,33 +16,46 @@ import os
 import re
 from pathlib import Path
 
-from flask import Flask, Response, jsonify, request, send_file
+from flask import Flask, Response, jsonify, request, send_from_directory
 from flask.typing import ResponseReturnValue
+from werkzeug.exceptions import NotFound
 
 from agent.agent import triage
 from agent.schema import to_json
 
-app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024  # 1 MB request limit
 _WEB_DIR = Path(__file__).parent
+# Built single-page app produced by `npm run build` in frontend/ (Vite outDir).
+_DIST_DIR = _WEB_DIR / "dist"
+
+# Point Flask's built-in static handler at the bundle so hashed JS/CSS under
+# web/dist/static are served at /static/<file>; the SPA fallback below covers
+# index.html, the favicon, and client-side routes.
+app = Flask(
+    __name__,
+    static_folder=str(_DIST_DIR / "static"),
+    static_url_path="/static",
+)
+app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024  # 1 MB request limit
 
 # Hostname/IP characters only; length bounded to 253 (max DNS name length).
 _VALID_HOST = re.compile(r"^[a-zA-Z0-9.\-_]{1,253}$")
 
 
 @app.route("/")
-def index() -> Response:
-    return send_file(_WEB_DIR / "index.html")
+def index() -> ResponseReturnValue:
+    return send_from_directory(_DIST_DIR, "index.html")
 
 
-@app.route("/app.js")
-def serve_app_js() -> Response:
-    return send_file(_WEB_DIR / "app.js", mimetype="application/javascript")
-
-
-@app.route("/favicon.ico")
-def serve_favicon() -> Response:
-    return Response(status=204)
+# SPA static + fallback: serve a built asset when the path maps to a real file
+# (hashed JS/CSS under static/, the favicon), otherwise return index.html so
+# refreshes and deep links resolve to the app. This only handles GET; the POST
+# API routes below (/scan, /triage) are matched first and are unaffected.
+@app.route("/<path:path>")
+def static_or_spa(path: str) -> ResponseReturnValue:
+    try:
+        return send_from_directory(_DIST_DIR, path)
+    except NotFound:
+        return send_from_directory(_DIST_DIR, "index.html")
 
 
 @app.post("/scan")
