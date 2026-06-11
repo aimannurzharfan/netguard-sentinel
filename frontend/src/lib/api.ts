@@ -13,7 +13,7 @@ async function postJson(url: string, body: unknown): Promise<TriageResult> {
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : "network error"
-    throw new Error(`Could not reach the server: ${message}`)
+    throw new Error(`Could not reach the server: ${message}`, { cause: err })
   }
 
   let data: unknown

@@ -61,4 +61,7 @@ function Button({
   )
 }
 
+// Exporting the cva variants alongside the component is the standard shadcn
+// pattern; fast refresh falls back to a full reload for this file only.
+// eslint-disable-next-line react-refresh/only-export-components
 export { Button, buttonVariants }
