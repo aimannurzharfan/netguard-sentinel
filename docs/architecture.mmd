@@ -1,34 +1,29 @@
 flowchart TD
-    USER["User / Browser"]
-    CLI["python -m netguard_sentinel &lt;host&gt;"]
-    UI["Web UI\n(web/index.html)"]
-    SERVER["Flask server\n(web/server.py)"]
-    SCANNER["scanner/scan.py\nTCP connect · banner grab\nservice fingerprint"]
-
-    subgraph FOUNDRY["Microsoft Foundry"]
-        AGENT["agent/agent.py\n6-step triage pipeline\n1 Intake  2 Enrich  3 Score\n4 Rank  5 Attack-path  6 Remediate"]
+    subgraph LOCAL["Local machine"]
+        UI["React Web UI\n(web/dist)"]
+        CLI["CLI\npython -m netguard_sentinel &lt;host&gt;"]
+        SERVER["Flask server (web/server.py)\ntarget-policy guard - rate limit"]
+        SCANNER["scanner/scan.py\nTCP connect - banner grab - fingerprint"]
+        AGENT["agent/agent.py\n6-step pipeline: intake, enrich, score,\nrank, attack-path, remediate"]
+        TOOL["threat_intel_lookup\n(tools/threat_intel.py)"]
+        CACHE["Layer 1: local cache\ndata/cache/cves.json\nNVD - EPSS - CISA KEV"]
+        ORACLE["Layer 2: Oracle 23ai in Docker\nAI Vector Search"]
+        FALLBACK["Deterministic local fallback\nused when Foundry is unavailable"]
+        RESULT["TriageResult JSON\nfindings ranked worst-first\nby composite CVSS + EPSS + KEV\nMITRE ATT&CK - remediation"]
     end
 
-    TOOL["threat_intel_lookup(service)\ntools/threat_intel.py"]
-
-    subgraph L1["Layer 1 — local cache"]
-        CACHE["data/cache/cves.json\nNVD · EPSS · CISA KEV"]
+    subgraph AZURE["Microsoft Azure AI Foundry"]
+        FOUNDRY["Microsoft Foundry - Phi-4-mini-instruct"]
     end
 
-    subgraph L2["Layer 2 — Oracle 23ai"]
-        ORACLE["Oracle 23ai\nAI Vector Search\n(THREAT_BACKEND=oracle)"]
-    end
-
-    RESULT["TriageResult JSON\nFindings ranked worst-first\nMITRE ATT&CK · Remediation"]
-
-    USER -->|"click Scan"| UI
-    CLI -->|scan + triage| SCANNER
     UI -->|"POST /scan"| SERVER
+    CLI --> SCANNER
     SERVER --> SCANNER
-    SCANNER -->|scan JSON| AGENT
-    AGENT -->|calls tool| TOOL
-    TOOL -->|cache backend| CACHE
-    TOOL -->|oracle backend| ORACLE
+    SCANNER -->|"scan JSON"| AGENT
+    AGENT --> TOOL
+    TOOL -->|"THREAT_BACKEND=cache"| CACHE
+    TOOL -->|"THREAT_BACKEND=oracle"| ORACLE
+    AGENT <-->|"attack-path narrative\nand remediation prose"| FOUNDRY
+    AGENT -.-> FALLBACK
     AGENT --> RESULT
-    RESULT -->|rendered| UI
-    RESULT -->|stdout| CLI
+    RESULT -->|"rendered"| UI
