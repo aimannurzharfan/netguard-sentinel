@@ -14,7 +14,7 @@ import sys
 
 from agent.agent import triage
 from agent.schema import to_json
-from scanner.scan import scan
+from scanner.scan import TargetPolicyError, scan, validate_and_resolve_target
 
 
 def main() -> None:
@@ -39,8 +39,16 @@ def main() -> None:
             int(p.strip()) for p in args.ports.split(",") if p.strip().isdigit()
         ]
 
+    # Enforce the default-deny target policy before any packets are sent, and
+    # scan the resolved IP so the name cannot map elsewhere after the check.
+    try:
+        resolved = validate_and_resolve_target(args.host)
+    except TargetPolicyError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        raise SystemExit(2) from None
+
     print(f"Scanning {args.host} ...", file=sys.stderr)
-    scan_data = scan(args.host, port_list)
+    scan_data = scan(resolved[0], port_list)
     n = len(scan_data["ports"])
     print(f"Scan complete: {n} open port(s) found.", file=sys.stderr)
 

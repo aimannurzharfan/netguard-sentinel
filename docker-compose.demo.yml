@@ -1,19 +1,38 @@
 # Deliberately old services for local vulnerability scanning demos.
 # These containers are intentionally vulnerable. Run on your own machine only.
-# Do not expose these ports outside localhost.
+# Every port is bound to 127.0.0.1, so nothing is reachable off this host.
 #
 # Authorized use: local testing on machines you control.
 #
 # Usage:
 #   docker compose -f docker-compose.demo.yml up -d
+#   python -m netguard_sentinel 127.0.0.1 --ports 22,80,8080
 #
-# Then open the NetGuard Sentinel UI, leave the host as 127.0.0.1, and click Scan.
-# The scanner finds Apache 2.4.49 on port 8080 and triage ranks CVE-2021-41773
-# (CISA KEV, EPSS ~0.97) as priority 1.
+# One scan surfaces three CVE-bearing findings across three services. Triage
+# ranks the Apache CISA KEV bug (CVE-2021-41773) as priority 1, above the
+# OpenSSH and nginx findings. Each banner reports a real version that the
+# matched CVEs actually affect, so the demo uses no fabricated data.
+#
+# Service         Image                          Host port  Banner reports     CVEs
+# Apache httpd    httpd:2.4.49                   8080       Apache/2.4.49      CVE-2021-41773, CVE-2021-42013 (KEV)
+# OpenSSH         rastasheep/ubuntu-sshd:14.04   22         OpenSSH_6.6.1p1    CVE-2023-38408, CVE-2016-0777
+# nginx           nginx:1.18.0                   80         nginx/1.18.0       CVE-2021-23017
 
 services:
   apache249:
     image: httpd:2.4.49
     ports:
       - "127.0.0.1:8080:80"
+    restart: "no"
+
+  openssh66:
+    image: rastasheep/ubuntu-sshd:14.04
+    ports:
+      - "127.0.0.1:22:22"
+    restart: "no"
+
+  nginx118:
+    image: nginx:1.18.0
+    ports:
+      - "127.0.0.1:80:80"
     restart: "no"

@@ -14,7 +14,7 @@ This project grew out of [NetGuard](https://github.com/aimannurzharfan/Network-S
 
 Six stages, all automated:
 
-1. **Port scan** -- threaded TCP connect scan, banner grab, service and version fingerprinted from the banner with regex (Apache/2.4.49, SSH-2.0-OpenSSH_7.4, 220 (vsFTPd 2.3.4), etc.).
+1. **Port scan** -- threaded TCP connect scan, banner grab, service and version fingerprinted from the banner with regex (Apache/2.4.49, SSH-2.0-OpenSSH_6.6.1p1, nginx/1.18.0, etc.).
 2. **Vulnerability enrichment** -- calls the `threat_intel_lookup` tool, which returns CVEs with CVSS base score (NVD), EPSS exploit probability (FIRST), and CISA KEV known-exploited status.
 3. **Composite risk scoring** -- combines the three signals into a 0-100 score per CVE (formula below).
 4. **Contextual prioritization** -- ranks findings worst-first. A reachable, actively-exploited medium outranks an unreachable critical.
@@ -112,13 +112,20 @@ python -m web.server            # start the UI at http://localhost:5000
 
 ## Demo: scan a deliberately vulnerable local target
 
-The demo container runs Apache 2.4.49 on localhost port 8080. The scanner fingerprints it, triage returns CVE-2021-41773 at priority 1.
+`docker-compose.demo.yml` starts three deliberately old services on localhost, each on its own port and each bound to `127.0.0.1` so nothing is reachable off this host. One scan surfaces three CVE-bearing findings across three services, ranked worst-first. The Apache CISA KEV bug stays at priority 1, above the OpenSSH and nginx findings. Every banner reports a real version that its matched CVEs actually affect, so the demo uses only real vulnerability data (live NVD CVSS, FIRST EPSS, CISA KEV).
+
+| Service | Image | Port | Banner reports | CVEs |
+| --- | --- | --- | --- | --- |
+| Apache httpd | `httpd:2.4.49` | 8080 | `Apache/2.4.49` | CVE-2021-41773, CVE-2021-42013 (CISA KEV) |
+| OpenSSH | `rastasheep/ubuntu-sshd:14.04` | 22 | `OpenSSH_6.6.1p1` | CVE-2023-38408, CVE-2016-0777 |
+| nginx | `nginx:1.18.0` | 80 | `nginx/1.18.0` | CVE-2021-23017 |
 
 ```bash
 docker compose -f docker-compose.demo.yml up -d
+python -m netguard_sentinel 127.0.0.1 --ports 22,80,8080
 ```
 
-Open http://localhost:5000, leave the host as `127.0.0.1`, and click **Scan**. The result appears in a few seconds.
+Or open http://localhost:5000, leave the host as `127.0.0.1`, and click **Scan**. The result appears in a few seconds with all three findings sorted by priority. Each finding only lists CVEs for its own product (the scanner matches on an exact product key, so an Apache query never returns an Apache Struts CVE).
 
 Authorized use: local testing on machines you control only.
 
@@ -128,7 +135,7 @@ Scan and triage in one command:
 
 ```bash
 python -m netguard_sentinel 127.0.0.1
-python -m netguard_sentinel 127.0.0.1 --ports 80,8080,22,21
+python -m netguard_sentinel 127.0.0.1 --ports 22,80,8080   # exactly the demo ports
 ```
 
 Scanner only (outputs raw scan JSON):
