@@ -11,6 +11,13 @@ from __future__ import annotations
 
 import os
 
+from dotenv import load_dotenv
+
+# Every entry point (web server, CLI, tests) reaches Foundry through this
+# module, so loading .env here guarantees the credentials are present no
+# matter which front door was used. Existing process env always wins.
+load_dotenv()
+
 
 def _ensure_openai_path(base: str) -> str:
     """Append the OpenAI-compatible route when the configured endpoint omits it.
