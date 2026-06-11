@@ -92,7 +92,7 @@ Switch threat enrichment backends with `THREAT_BACKEND=oracle` in `.env`.
 
 ## Quick start
 
-Requires Python 3.11+. Docker Desktop is optional (Oracle Layer 2 and demo target only).
+Requires Python 3.11 to 3.13. Python 3.14 is not yet supported because numpy and sentence-transformers do not ship 3.14 wheels. Docker Desktop is optional (Oracle Layer 2 and demo target only).
 
 ```bash
 python -m venv .venv
