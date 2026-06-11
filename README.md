@@ -184,6 +184,18 @@ FOUNDRY_API_KEY=<your key>
 
 `FOUNDRY_PROJECT_ENDPOINT` is also accepted as a fallback -- the client appends `/openai/v1` automatically. With these set, `triage()` sends enriched findings to Phi-4-mini-instruct for stages 4-6 and falls back to the deterministic pipeline on any error.
 
+## Security and scope
+
+NetGuard Sentinel is a local, authorized-use tool. It is meant to run on your own machine against hosts you own or are explicitly permitted to assess. It is not a hosted service and ships with no authentication layer by design.
+
+- **Default-deny scan targets.** The scanner and the `/scan` endpoint accept only targets that resolve to localhost or RFC1918 private ranges (`10/8`, `172.16/12`, `192.168/16`, loopback). The host is validated, resolved through DNS, and the resolved IP is re-checked against the policy, so a public name cannot slip through by mapping to an internal address. Public targets are refused with a clear message. To scan a public host you are authorized to test, set `ALLOW_PUBLIC_TARGETS=1`; a one-line authorized-use warning is logged whenever the flag is active.
+- **Socket-only scanning.** Probing uses plain TCP connect and banner reads. No user input ever reaches a shell, and there is no `subprocess` or `os.system` anywhere in the scan path. Scanning runs with bounded concurrency and per-connection socket timeouts so a scan cannot hang or exhaust resources.
+- **Rate limit.** `/scan` is capped at 10 requests per minute per client by default, configurable with `SCAN_RATE_LIMIT`. Exceeding it returns HTTP 429. The limiter is in-process with no external dependency.
+- **Server hardening.** Flask debug is off by default, request bodies are capped at 1 MB, error responses are generic with no stack traces, CORS is not enabled, and responses carry `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, and `X-Frame-Options: DENY`.
+- **Secrets.** No secrets are committed. `.env`, `.mcp.json`, `_local/`, `.claude/`, and `node_modules/` are gitignored; `.env.example` holds placeholders only.
+
+The localhost demo works one-click out of the box because `127.0.0.1` satisfies the default policy. Scanning `scanme.nmap.org` or any other public host requires the `ALLOW_PUBLIC_TARGETS=1` flag.
+
 ## License
 
 MIT
