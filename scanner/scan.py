@@ -16,10 +16,14 @@ import concurrent.futures
 import datetime
 import ipaddress
 import json
+import logging
+import os
 import re
 import socket
 import sys
 from pathlib import Path
+
+logger = logging.getLogger("netguard.scanner")
 
 # RFC1918 and loopback address ranges used for exposure classification.
 _INTERNAL_NETWORKS: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] = (
@@ -31,6 +35,87 @@ _INTERNAL_NETWORKS: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] = 
     ipaddress.ip_network("::1/128"),
 )
 
+# Hostname/IP characters only; length bounded to 253 (max DNS name length).
+_VALID_HOST = re.compile(r"^[A-Za-z0-9.\-_:]{1,253}$")
+
+
+class TargetPolicyError(ValueError):
+    """Raised when a scan target is rejected by the default-deny policy.
+
+    Carries an HTTP status hint so the web layer can map format errors (400)
+    apart from policy refusals (403) without re-parsing the message.
+    """
+
+    def __init__(self, message: str, status: int = 403) -> None:
+        super().__init__(message)
+        self.status = status
+
+
+def _is_internal_ip(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    return any(addr in net for net in _INTERNAL_NETWORKS)
+
+
+def _allow_public_targets() -> bool:
+    """Read the opt-in flag at call time so tests and operators can toggle it."""
+    return os.getenv("ALLOW_PUBLIC_TARGETS", "0") == "1"
+
+
+def validate_and_resolve_target(
+    host: str, allow_public: bool | None = None
+) -> list[str]:
+    """Validate a scan target and resolve it to the IPs that will be scanned.
+
+    Enforces the default-deny policy: a target is only allowed when every IP it
+    resolves to is loopback or RFC1918 private. Public targets are refused
+    unless ``allow_public`` (or the ALLOW_PUBLIC_TARGETS env flag) is set, in
+    which case a one-line authorized-use warning is logged.
+
+    Returns the resolved IP strings (deduped). The caller should scan these
+    resolved IPs, not the original name, so a name cannot be re-resolved to a
+    different address between this check and the scan.
+
+    Raises TargetPolicyError (status 400 for malformed/unresolvable input,
+    403 for a policy refusal).
+    """
+    if not isinstance(host, str) or not host.strip():
+        raise TargetPolicyError("host must be a non-empty string.", status=400)
+    host = host.strip()
+    if not _VALID_HOST.match(host):
+        raise TargetPolicyError(
+            "Invalid host format (use a hostname or IP address).", status=400
+        )
+
+    try:
+        infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
+    except socket.gaierror:
+        raise TargetPolicyError(
+            f"Could not resolve host '{host}'.", status=400
+        ) from None
+    resolved = sorted({str(info[4][0]) for info in infos})
+    if not resolved:
+        raise TargetPolicyError(f"Could not resolve host '{host}'.", status=400)
+
+    if allow_public is None:
+        allow_public = _allow_public_targets()
+
+    public = [ip for ip in resolved if not _is_internal_ip(ipaddress.ip_address(ip))]
+    if public and not allow_public:
+        raise TargetPolicyError(
+            f"Refusing to scan public target '{host}' "
+            f"(resolves to {', '.join(public)}). NetGuard Sentinel only scans "
+            "localhost and private networks by default. Set ALLOW_PUBLIC_TARGETS=1 "
+            "to scan a host you are explicitly authorized to assess.",
+            status=403,
+        )
+    if public:
+        logger.warning(
+            "ALLOW_PUBLIC_TARGETS is set: scanning public target %s (%s). "
+            "Authorized use only; scan hosts you own or are permitted to assess.",
+            host,
+            ", ".join(public),
+        )
+    return resolved
+
 
 def _classify_exposure(host: str) -> str | None:
     """Return 'internal' for RFC1918/loopback, 'internet' for public IPs.
@@ -40,9 +125,7 @@ def _classify_exposure(host: str) -> str | None:
     """
     try:
         addr = ipaddress.ip_address(host)
-        return (
-            "internal" if any(addr in net for net in _INTERNAL_NETWORKS) else "internet"
-        )
+        return "internal" if _is_internal_ip(addr) else "internet"
     except ValueError:
         return None
 
@@ -212,6 +295,7 @@ if __name__ == "__main__":
         "WARNING: Only scan hosts you own or are explicitly authorized to test.",
         file=sys.stderr,
     )
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
 
     port_list: list[int] | None = None
     if args.ports:
@@ -219,7 +303,14 @@ if __name__ == "__main__":
             int(p.strip()) for p in args.ports.split(",") if p.strip().isdigit()
         ]
 
-    result = scan(args.host, port_list)
+    try:
+        resolved = validate_and_resolve_target(args.host)
+    except TargetPolicyError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        raise SystemExit(2) from None
+
+    # Scan the resolved address so the name cannot map elsewhere after the check.
+    result = scan(resolved[0], port_list)
     output = json.dumps(result, indent=2)
     print(output)
     if args.out:
