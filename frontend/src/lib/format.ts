@@ -15,6 +15,10 @@ export interface SeverityMeta {
   bg: string
   /** Tailwind border utility. */
   border: string
+  /** Left-edge accent on the finding card. Reinforces the text label only. */
+  cardAccent: string
+  /** Faint severity tint over the card surface (AA-safe, see index.css). */
+  cardTint: string
 }
 
 export const SEVERITY_META: Record<Severity, SeverityMeta> = {
@@ -23,24 +27,32 @@ export const SEVERITY_META: Record<Severity, SeverityMeta> = {
     text: "text-critical",
     bg: "bg-critical-bg",
     border: "border-critical/40",
+    cardAccent: "border-l-critical",
+    cardTint: "bg-critical-tint",
   },
   high: {
     label: "High",
     text: "text-high",
     bg: "bg-high-bg",
     border: "border-high/40",
+    cardAccent: "border-l-high",
+    cardTint: "bg-high-tint",
   },
   medium: {
     label: "Medium",
     text: "text-medium",
     bg: "bg-medium-bg",
     border: "border-medium/40",
+    cardAccent: "border-l-medium",
+    cardTint: "bg-medium-tint",
   },
   low: {
     label: "Low",
     text: "text-low",
     bg: "bg-low-bg",
     border: "border-low/40",
+    cardAccent: "border-l-low",
+    cardTint: "bg-low-tint",
   },
 }
 

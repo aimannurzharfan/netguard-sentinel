@@ -1,5 +1,6 @@
-import { ShieldAlert, Terminal } from "lucide-react"
-import type { Finding } from "@/lib/types"
+import { useId, useState } from "react"
+import { ChevronDown, ShieldAlert, Terminal } from "lucide-react"
+import type { CVE, Finding } from "@/lib/types"
 import { cvssLabel, epssPct, severityMeta } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { CopyButton } from "./CopyButton"
@@ -13,12 +14,80 @@ function Metric({ label, value }: { label: string; value: string }) {
   )
 }
 
+/* Summaries shorter than this always fit two clamped lines, even in the
+   narrower two-column layout, so the expand control would be a no-op.
+   Note the backend caps summaries at 120 chars, so the threshold must sit
+   below that for the control to ever appear. */
+const CLAMP_THRESHOLD = 100
+
+function CveItem({ cve }: { cve: CVE }) {
+  const [expanded, setExpanded] = useState(false)
+  const summaryId = useId()
+  const clampable = (cve.summary || "").length > CLAMP_THRESHOLD
+
+  return (
+    <li className="flex flex-col gap-2 rounded-sm border border-border bg-background/60 p-3">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="font-semibold text-primary">{cve.id}</span>
+        {cve.kev ? (
+          <span className="tactical-label rounded-sm bg-kev-bg px-1.5 py-0.5 text-[0.6rem] text-kev">
+            KEV
+          </span>
+        ) : null}
+      </div>
+
+      {/* Fixed metric order keeps badges aligned across the CVE grid. */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Metric label="score" value={String(cve.composite_score)} />
+        <Metric label="CVSS" value={cvssLabel(cve.cvss)} />
+        <Metric label="EPSS" value={`${epssPct(cve.epss)}%`} />
+      </div>
+
+      {cve.summary ? (
+        <p
+          id={summaryId}
+          className={cn(
+            "text-[0.78rem] leading-relaxed text-muted-foreground",
+            clampable && !expanded && "line-clamp-2"
+          )}
+        >
+          {cve.summary}
+        </p>
+      ) : null}
+
+      {clampable ? (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-controls={summaryId}
+          aria-label={`${expanded ? "Show less of" : "Show more of"} the description for ${cve.id}`}
+          onClick={() => setExpanded((v) => !v)}
+          className="-mx-1.5 -my-1.5 inline-flex w-fit cursor-pointer items-center gap-1 rounded-sm px-1.5 py-1.5 text-[0.72rem] font-semibold text-primary hover:underline"
+        >
+          {expanded ? "Show less" : "Show more"}
+          <ChevronDown
+            aria-hidden="true"
+            className={cn(
+              "size-3 transition-transform motion-reduce:transition-none",
+              expanded && "rotate-180"
+            )}
+          />
+        </button>
+      ) : null}
+    </li>
+  )
+}
+
 export function FindingCard({ finding }: { finding: Finding }) {
   const sev = severityMeta(finding.contextual_severity)
 
   return (
     <article
-      className="rounded-md border border-border bg-card p-4 transition-colors focus-within:border-primary/50"
+      className={cn(
+        "rounded-md border border-border border-l-2 p-4 transition-colors focus-within:border-primary/50 sm:p-5",
+        sev.cardAccent,
+        sev.cardTint
+      )}
       aria-label={`Priority ${finding.priority}: ${finding.service} on port ${finding.port}`}
     >
       <div className="flex flex-wrap items-center gap-2">
@@ -48,36 +117,23 @@ export function FindingCard({ finding }: { finding: Finding }) {
       </div>
 
       {finding.cves.length > 0 ? (
-        <ul className="mt-3 divide-y divide-border" aria-label="Matched CVEs">
+        <ul
+          className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2"
+          aria-label="Matched CVEs"
+        >
           {finding.cves.map((c) => (
-            <li
-              key={c.id}
-              className="flex flex-wrap items-baseline gap-x-2 gap-y-1 py-1.5"
-            >
-              <span className="font-semibold text-primary">{c.id}</span>
-              {c.kev ? (
-                <span className="tactical-label rounded-sm bg-kev-bg px-1.5 py-0.5 text-[0.6rem] text-kev">
-                  KEV
-                </span>
-              ) : null}
-              <Metric label="score" value={String(c.composite_score)} />
-              <Metric label="CVSS" value={cvssLabel(c.cvss)} />
-              <Metric label="EPSS" value={`${epssPct(c.epss)}%`} />
-              <span className="w-full text-[0.76rem] text-muted-foreground sm:w-auto sm:flex-1">
-                {c.summary}
-              </span>
-            </li>
+            <CveItem key={c.id} cve={c} />
           ))}
         </ul>
       ) : (
-        <p className="mt-3 text-[0.8rem] text-muted-foreground">
+        <p className="mt-4 text-[0.8rem] leading-relaxed text-muted-foreground">
           No known vulnerabilities match this service version.
         </p>
       )}
 
       {finding.mitre.length > 0 ? (
         <ul
-          className="mt-3 flex flex-wrap gap-1.5"
+          className="mt-4 flex flex-wrap gap-1.5"
           aria-label="MITRE ATT&CK techniques"
         >
           {finding.mitre.map((m) => (
@@ -94,13 +150,13 @@ export function FindingCard({ finding }: { finding: Finding }) {
       ) : null}
 
       {finding.rationale ? (
-        <p className="mt-3 text-[0.82rem] leading-relaxed text-muted-foreground">
+        <p className="mt-4 text-[0.82rem] leading-relaxed text-muted-foreground">
           {finding.rationale}
         </p>
       ) : null}
 
       {finding.remediation ? (
-        <div className="mt-3 flex gap-2 rounded-sm border-l-2 border-primary bg-signal-bg/40 px-3 py-2">
+        <div className="mt-4 flex gap-2 rounded-sm border-l-2 border-primary bg-signal-bg/40 px-3 py-2">
           <ShieldAlert
             className="mt-0.5 size-4 shrink-0 text-primary"
             aria-hidden="true"

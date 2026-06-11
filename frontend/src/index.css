@@ -46,6 +46,15 @@
   --medium-bg: #272206;
   --low: #5fdc8c;
   --low-bg: #0e2419;
+
+  /* Card-surface tints: severity colour mixed faintly into the card so a
+     whole finding reads its tier at a glance. Kept at 5% so muted text on
+     top still clears the WCAG AA 4.5:1 contrast floor. */
+  --critical-tint: color-mix(in oklab, var(--critical) 5%, var(--card));
+  --high-tint: color-mix(in oklab, var(--high) 5%, var(--card));
+  --medium-tint: color-mix(in oklab, var(--medium) 5%, var(--card));
+  --low-tint: color-mix(in oklab, var(--low) 5%, var(--card));
+
   --signal: #21e0c4;
   --signal-bg: #0a2722;
   --kev: #ff6b62;
@@ -100,6 +109,10 @@
   --color-medium-bg: var(--medium-bg);
   --color-low: var(--low);
   --color-low-bg: var(--low-bg);
+  --color-critical-tint: var(--critical-tint);
+  --color-high-tint: var(--high-tint);
+  --color-medium-tint: var(--medium-tint);
+  --color-low-tint: var(--low-tint);
   --color-signal: var(--signal);
   --color-signal-bg: var(--signal-bg);
   --color-kev: var(--kev);

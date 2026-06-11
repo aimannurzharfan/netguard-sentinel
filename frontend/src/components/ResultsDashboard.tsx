@@ -16,7 +16,7 @@ export function ResultsDashboard({
   const findings = result.findings ?? []
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <HostOverview result={result} onReset={onReset} />
 
       <PriorityComparison
@@ -30,12 +30,12 @@ export function ResultsDashboard({
         <section aria-labelledby="findings-heading">
           <h3
             id="findings-heading"
-            className="tactical-label mb-2 flex items-center gap-2 text-[0.72rem] text-muted-foreground"
+            className="tactical-label mb-3 flex items-center gap-2 text-[0.72rem] text-muted-foreground"
           >
             <ListTree className="size-3.5" aria-hidden="true" />
             Findings ranked by risk ({findings.length})
           </h3>
-          <div className="space-y-3">
+          <div className="space-y-6">
             {findings.map((f) => (
               <FindingCard key={`${f.port}-${f.service}`} finding={f} />
             ))}
