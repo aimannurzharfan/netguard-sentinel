@@ -20,6 +20,7 @@ import oracledb
 from dotenv import load_dotenv
 
 from data.embed import embed_batch
+from tools.threat_intel import product_key
 
 load_dotenv()
 
@@ -29,6 +30,7 @@ CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS cve_knowledge (
     id          VARCHAR2(20)    PRIMARY KEY,
     service_tag VARCHAR2(200),
+    product_key VARCHAR2(50),
     cvss        NUMBER(3,1),
     epss        NUMBER(6,5),
     kev         NUMBER(1)       DEFAULT 0,
@@ -37,16 +39,21 @@ CREATE TABLE IF NOT EXISTS cve_knowledge (
 ) TABLESPACE USERS
 """
 
+# Pre-23ai tables lack the product_key column; ORA-01430 means it already exists.
+ADD_PRODUCT_KEY_SQL = "ALTER TABLE cve_knowledge ADD (product_key VARCHAR2(50))"
+
 UPSERT_SQL = """
 MERGE INTO cve_knowledge tgt
 USING (SELECT :id AS id FROM dual) src
 ON (tgt.id = src.id)
 WHEN MATCHED THEN UPDATE SET
-    service_tag = :service_tag, cvss = :cvss, epss = :epss,
+    service_tag = :service_tag, product_key = :product_key,
+    cvss = :cvss, epss = :epss,
     kev = :kev, description = :description, embedding = :embedding
 WHEN NOT MATCHED THEN INSERT
-    (id, service_tag, cvss, epss, kev, description, embedding)
-    VALUES (:id, :service_tag, :cvss, :epss, :kev, :description, :embedding)
+    (id, service_tag, product_key, cvss, epss, kev, description, embedding)
+    VALUES (:id, :service_tag, :product_key, :cvss, :epss, :kev,
+            :description, :embedding)
 """
 
 
@@ -83,6 +90,12 @@ def load() -> None:
     cur = con.cursor()
 
     cur.execute(CREATE_TABLE_SQL)
+    try:
+        cur.execute(ADD_PRODUCT_KEY_SQL)
+    except oracledb.DatabaseError as exc:
+        (error,) = exc.args
+        if error.code != 1430:  # column being added already exists
+            raise
     con.commit()
 
     print("Inserting into Oracle...")
@@ -92,6 +105,8 @@ def load() -> None:
             {
                 "id": rec["id"],
                 "service_tag": rec["service_tag"],
+                "product_key": rec.get("product")
+                or product_key(rec.get("service_tag", "")),
                 "cvss": rec["cvss"],
                 "epss": rec["epss"],
                 "kev": 1 if rec["kev"] else 0,

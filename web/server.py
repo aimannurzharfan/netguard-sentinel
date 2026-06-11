@@ -139,9 +139,7 @@ def run_scan() -> ResponseReturnValue:
     try:
         from scanner.scan import DEFAULT_PORTS, scan as tcp_scan
 
-        scan_data = tcp_scan(
-            resolved[0], ports if ports is not None else DEFAULT_PORTS
-        )
+        scan_data = tcp_scan(resolved[0], ports if ports is not None else DEFAULT_PORTS)
         # Preserve the operator's original target string for display.
         if isinstance(host, str):
             scan_data["host"] = host.strip()
