@@ -16,7 +16,7 @@ This project grew out of [NetGuard](https://github.com/aimannurzharfan/Network-S
 
 ![NetGuard Sentinel scanning localhost](docs/demo-screenshot.png)
 
-Demo video: [<link>](https://youtu.be/jJjYdlXD8PU)
+[![Demo Video](https://img.shields.io/badge/Demo-Video-red?logo=youtube)](https://youtu.be/jJjYdlXD8PU)
 
 The screenshot shows the one-click localhost scan: three deliberately vulnerable services (Apache 2.4.49, OpenSSH 6.6.1p1, nginx 1.18.0), with the CISA KEV Apache bug at priority 1.
 
