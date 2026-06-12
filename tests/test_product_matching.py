@@ -157,6 +157,7 @@ def _det_by_port() -> dict[int, Finding]:
         cves=[CVE("CVE-2021-41773", 9.8, 0.94, True, 97, "path traversal")],
         rationale="on CISA KEV, EPSS 94%, composite 97",
         remediation="upgrade Apache httpd to 2.4.62 or later",
+        remediation_command="sudo apt-get install --only-upgrade apache2",
     )
     apache.mitre = _map_mitre(apache.service, True)
     mysql = Finding(
@@ -189,7 +190,8 @@ MODEL_DATA = {
             ],
             "rationale": "CVE-2021-41773 is on KEV with high EPSS.",
             "remediation": "Patch Apache to fix CVE-2021-41773.",
-            "remediation_command": "sudo apt-get install --only-upgrade apache2",
+            # Fabricated package name and version pin; the merge must ignore it.
+            "remediation_command": "sudo apt-get install httpd=2.4.99",
         },
         {
             "port": 3306,
@@ -237,6 +239,22 @@ def test_merge_scrubs_foreign_cve_from_prose():
     assert "CVE-2017-5638" not in mysql.rationale
     assert "CVE-2017-5638" not in mysql.remediation
     assert mysql.rationale == "No known vulnerabilities match this service version."
+
+
+def test_merge_uses_deterministic_remediation_command():
+    """The shell command always comes from the deterministic pipeline, never the
+    model, so a fabricated package name or version pin can never reach the UI."""
+    result = _build_from_foundry(
+        json.loads(json.dumps(MODEL_DATA)),
+        _det_by_port(),
+        naive_cvss_order=[],
+        tool_calls=[],
+        data_backend="cache",
+        host="10.0.0.7",
+    )
+    apache = next(f for f in result.findings if f.port == 80)
+    assert apache.remediation_command == "sudo apt-get install --only-upgrade apache2"
+    assert "httpd=2.4.99" not in apache.remediation_command
     # Legitimate same-host CVE mentions survive.
     apache = next(f for f in result.findings if f.port == 80)
     assert "CVE-2021-41773" in apache.rationale

@@ -16,8 +16,8 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 /* Summaries shorter than this always fit two clamped lines, even in the
    narrower two-column layout, so the expand control would be a no-op.
-   Note the backend caps summaries at 120 chars, so the threshold must sit
-   below that for the control to ever appear. */
+   The backend sends the full NVD description, so anything longer gets
+   clamped collapsed and shown complete when expanded. */
 const CLAMP_THRESHOLD = 100
 
 function CveItem({ cve }: { cve: CVE }) {

@@ -497,9 +497,10 @@ def _build_from_foundry(
                 mitre=det.mitre or _map_mitre(det.service, bool(det.cves)),
                 rationale=_clean(mf.get("rationale"), det.rationale),
                 remediation=_clean(mf.get("remediation"), det.remediation),
-                remediation_command=_clean(
-                    mf.get("remediation_command"), det.remediation_command
-                ),
+                # The shell command is never model prose: a small model
+                # fabricates package names and version pins. Always use the
+                # deterministic command table.
+                remediation_command=det.remediation_command,
                 priority=_safe_int(mf.get("priority"), 0),
             )
         )
@@ -627,7 +628,7 @@ def triage(scan_input: str) -> TriageResult:
                     epss=raw["epss"],
                     kev=raw["kev"],
                     composite_score=score,
-                    summary=raw.get("description", "")[:120],
+                    summary=raw.get("description", ""),
                 )
             )
         cves.sort(key=lambda c: c.composite_score, reverse=True)

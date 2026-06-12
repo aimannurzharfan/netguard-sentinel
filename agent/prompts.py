@@ -68,6 +68,7 @@ Rules:
 - Every finding object starts with the "port" integer. A finding never has a top-level "CVE", "description", or "score" key.
 - "attack_path" is an OBJECT with keys narrative, steps, break_point. It is never a plain string.
 - Use ONLY the CVE IDs given in the input. Never invent CVE IDs. Do not recompute any score.
+- "remediation" is prose for a human. Do not write shell commands, package names, or version pins; those are added by the pipeline.
 - Rank by the per-finding score, highest first: priority 1 is the most dangerous finding.
 - A reachable, actively-exploited (KEV) finding outranks an unexploited finding with higher CVSS.
 
@@ -83,8 +84,7 @@ Schema:
       "contextual_severity": "critical" | "high" | "medium" | "low",
       "mitre": [{"technique": "<id>", "name": "<name>", "tactic": "<tactic>"}],
       "rationale": "<why this rank>",
-      "remediation": "<specific, actionable fix>",
-      "remediation_command": "<one shell command>"
+      "remediation": "<specific, actionable fix>"
     }
   ],
   "attack_path": {
@@ -106,7 +106,7 @@ Exposure: internet
   CVE-2020-15778 cvss=7.8 epss=0.2 kev=False score=40: scp command injection via crafted filename
 
 Example output (two findings for two ports; attack_path is an object):
-{"host": "192.168.1.10", "host_risk_score": 63, "summary": "Internet-facing nginx with an actively exploited resolver flaw (CVE-2021-23017); patch nginx first to break the chain.", "findings": [{"port": 80, "priority": 1, "contextual_severity": "critical", "mitre": [{"technique": "T1190", "name": "Exploit Public-Facing Application", "tactic": "Initial Access"}], "rationale": "CVE-2021-23017 is on CISA KEV with EPSS 0.90 and composite 85; reachable from the internet on 0.0.0.0.", "remediation": "Upgrade nginx to 1.20.1 or later to fix the resolver off-by-one.", "remediation_command": "sudo apt-get install --only-upgrade nginx"}, {"port": 22, "priority": 2, "contextual_severity": "medium", "mitre": [{"technique": "T1021.004", "name": "Remote Services: SSH", "tactic": "Lateral Movement"}], "rationale": "CVE-2020-15778 requires authentication and is not on KEV; composite 40.", "remediation": "Upgrade OpenSSH and avoid passing untrusted input to scp.", "remediation_command": "sudo apt-get install --only-upgrade openssh-server"}], "attack_path": {"narrative": "An attacker reaches the internet-facing nginx on port 80 and exploits CVE-2021-23017 for remote code execution, gaining initial access, then reuses harvested credentials over OpenSSH on port 22 to move laterally.", "steps": [{"finding_port": 80, "technique": "T1190", "tactic": "Initial Access"}, {"finding_port": 22, "technique": "T1021.004", "tactic": "Lateral Movement"}], "break_point": "Patching nginx on port 80 severs the chain at initial access, the highest-leverage fix."}, "tool_calls": []}
+{"host": "192.168.1.10", "host_risk_score": 63, "summary": "Internet-facing nginx with an actively exploited resolver flaw (CVE-2021-23017); patch nginx first to break the chain.", "findings": [{"port": 80, "priority": 1, "contextual_severity": "critical", "mitre": [{"technique": "T1190", "name": "Exploit Public-Facing Application", "tactic": "Initial Access"}], "rationale": "CVE-2021-23017 is on CISA KEV with EPSS 0.90 and composite 85; reachable from the internet on 0.0.0.0.", "remediation": "Upgrade nginx to a release that fixes the resolver off-by-one."}, {"port": 22, "priority": 2, "contextual_severity": "medium", "mitre": [{"technique": "T1021.004", "name": "Remote Services: SSH", "tactic": "Lateral Movement"}], "rationale": "CVE-2020-15778 requires authentication and is not on KEV; composite 40.", "remediation": "Upgrade OpenSSH and avoid passing untrusted input to scp."}], "attack_path": {"narrative": "An attacker reaches the internet-facing nginx on port 80 and exploits CVE-2021-23017 for remote code execution, gaining initial access, then reuses harvested credentials over OpenSSH on port 22 to move laterally.", "steps": [{"finding_port": 80, "technique": "T1190", "tactic": "Initial Access"}, {"finding_port": 22, "technique": "T1021.004", "tactic": "Lateral Movement"}], "break_point": "Patching nginx on port 80 severs the chain at initial access, the highest-leverage fix."}, "tool_calls": []}
 """
 
 

@@ -99,6 +99,24 @@ def test_clean_host_invents_no_cves():
 
 
 @requires_cache
+def test_cve_summary_is_full_description():
+    """CVE summaries must carry the complete source description, never a
+    character-sliced prefix that cuts mid-word."""
+    from agent.agent import triage
+
+    descriptions = {r["id"]: r["description"] for r in json.loads(CACHE.read_text())}
+    result = triage(EXPOSED_SCAN)
+    checked = 0
+    for finding in result.findings:
+        for cve in finding.cves:
+            assert cve.summary == descriptions[cve.id], (
+                f"{cve.id} summary is not the full description: {cve.summary!r}"
+            )
+            checked += 1
+    assert checked > 0
+
+
+@requires_cache
 def test_host_risk_score_in_range():
     from agent.agent import triage
 
