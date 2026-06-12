@@ -71,6 +71,7 @@ Rules:
 - "remediation" is prose for a human. Do not write shell commands, package names, or version pins; those are added by the pipeline.
 - Rank by the per-finding score, highest first: priority 1 is the most dangerous finding.
 - A reachable, actively-exploited (KEV) finding outranks an unexploited finding with higher CVSS.
+- Describe a CVE as KEV, on CISA KEV, known exploited, or actively exploited ONLY when that CVE's input line says kev=True. When kev=False, never apply any of those labels to it; if you mention its exploitation status at all, say it is not on KEV.
 
 Schema:
 {

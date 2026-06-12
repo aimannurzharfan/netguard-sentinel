@@ -332,6 +332,67 @@ def _parse_scan(scan_json: str) -> dict:
 
 _CVE_RE = re.compile(r"CVE-\d{4}-\d{4,}", re.IGNORECASE)
 
+# KEV status is code-authoritative: model prose may only call a CVE "KEV"
+# (or "known exploited" / "actively exploited") when that CVE's kev flag is true.
+_KEV_CLAIM_RE = re.compile(
+    r"\bKEV\b|known[ -]exploited|actively[ -]exploited", re.IGNORECASE
+)
+_KEV_NEGATIONS = frozenset(
+    {
+        "not",
+        "no",
+        "never",
+        "non",
+        "isn",
+        "aren",
+        "wasn",
+        "weren",
+        "without",
+        "neither",
+        "nor",
+        "lacks",
+        "absent",
+    }
+)
+_SENTENCE_RE = re.compile(r"(?<=[.;!?])\s+")
+
+
+def _affirms_kev(sentence: str) -> bool:
+    """True when the sentence claims KEV / actively-exploited status.
+
+    Negated mentions ("is not on KEV") and echoed flags ("kev=False") are
+    denials, not claims, and must survive the scrub.
+    """
+    for m in _KEV_CLAIM_RE.finditer(sentence):
+        if re.match(r"\s*[=:]\s*false", sentence[m.end() : m.end() + 8], re.IGNORECASE):
+            continue
+        preceding = re.findall(
+            r"[a-z]+", sentence[max(0, m.start() - 40) : m.start()].lower()
+        )
+        if not any(w in _KEV_NEGATIONS for w in preceding):
+            return True
+    return False
+
+
+def _kev_claims_supported(text: str, kev_ids: set[str], scope_has_kev: bool) -> bool:
+    """Check every affirmative KEV claim in the text against the kev flags.
+
+    A claim that names CVE IDs must name at least one CVE whose kev flag is
+    true. An unattributed claim ("on CISA KEV" with no CVE ID) is allowed only
+    when the surrounding scope (the finding, or the whole host for attack-path
+    and summary prose) contains a kev=True CVE.
+    """
+    for sentence in _SENTENCE_RE.split(text):
+        if not _affirms_kev(sentence):
+            continue
+        named = {m.upper() for m in _CVE_RE.findall(sentence)}
+        if named:
+            if not named & kev_ids:
+                return False
+        elif not scope_has_kev:
+            return False
+    return True
+
 
 def _safe_int(val: object, default: int = 0) -> int:
     """Convert a value from untrusted model output to int, returning default on failure."""
@@ -444,12 +505,15 @@ def _build_from_foundry(
     remediation narrative, attack-path, host_risk_score, and summary.
     The deterministic pipeline contributes: CVE data and MITRE techniques
     (always authoritative). Model prose that names a CVE outside the host's
-    enriched CVE set is replaced with the deterministic text for that field.
+    enriched CVE set, or that claims KEV status for a CVE whose kev flag is
+    false, is replaced with the deterministic text for that field.
     """
     host_cve_ids = {c.id for det in det_by_port.values() for c in det.cves}
+    host_kev_ids = {c.id for det in det_by_port.values() for c in det.cves if c.kev}
 
-    def _clean(model_text: object, fallback: str) -> str:
-        """Use model prose unless it references a CVE not enriched for this host."""
+    def _clean(model_text: object, fallback: str, scope_has_kev: bool) -> str:
+        """Use model prose unless it references a CVE not enriched for this host
+        or makes a KEV claim the kev flags do not support."""
         text = str(model_text or "").strip()
         if not text:
             return fallback
@@ -457,6 +521,13 @@ def _build_from_foundry(
             print(
                 "[netguard] Foundry prose referenced a CVE outside the host's "
                 "enriched set -- replaced with deterministic text",
+                file=sys.stderr,
+            )
+            return fallback
+        if not _kev_claims_supported(text, host_kev_ids, scope_has_kev):
+            print(
+                "[netguard] Foundry prose claimed KEV for a CVE whose kev flag "
+                "is false -- replaced with deterministic text",
                 file=sys.stderr,
             )
             return fallback
@@ -495,8 +566,16 @@ def _build_from_foundry(
                 # Deterministic MITRE is always authoritative; derive it when
                 # the enriched finding arrived without one.
                 mitre=det.mitre or _map_mitre(det.service, bool(det.cves)),
-                rationale=_clean(mf.get("rationale"), det.rationale),
-                remediation=_clean(mf.get("remediation"), det.remediation),
+                rationale=_clean(
+                    mf.get("rationale"),
+                    det.rationale,
+                    any(c.kev for c in det.cves),
+                ),
+                remediation=_clean(
+                    mf.get("remediation"),
+                    det.remediation,
+                    any(c.kev for c in det.cves),
+                ),
                 # The shell command is never model prose: a small model
                 # fabricates package names and version pins. Always use the
                 # deterministic command table.
@@ -552,8 +631,8 @@ def _build_from_foundry(
                     tactic=chosen.tactic,
                 )
             )
-        narrative = _clean(ap.get("narrative"), "")
-        break_point = _clean(ap.get("break_point"), "")
+        narrative = _clean(ap.get("narrative"), "", bool(host_kev_ids))
+        break_point = _clean(ap.get("break_point"), "", bool(host_kev_ids))
         if steps and narrative:
             attack_path = AttackPath(
                 narrative=narrative, steps=steps, break_point=break_point
@@ -563,7 +642,9 @@ def _build_from_foundry(
 
     risk = _safe_int(model_data.get("host_risk_score"), _host_risk_score(findings))
     risk = max(0, min(100, risk))
-    summary = _clean(model_data.get("summary"), _summary_text(host, risk))
+    summary = _clean(
+        model_data.get("summary"), _summary_text(host, risk), bool(host_kev_ids)
+    )
 
     return TriageResult(
         host=host,

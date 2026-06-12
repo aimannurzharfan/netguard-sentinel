@@ -291,3 +291,213 @@ def test_merge_attack_path_uses_deterministic_techniques_only():
         assert step.technique == "T1190", (
             f"step technique must come from the code map, got {step.technique}"
         )
+
+
+# --------------------------------------------------------------------------- #
+# Foundry merge: KEV status is code-authoritative                               #
+# --------------------------------------------------------------------------- #
+
+
+def _kev_mix_det_by_port() -> dict[int, Finding]:
+    """One genuine KEV finding (Apache) and one non-KEV finding (OpenSSH)."""
+    from agent.agent import _map_mitre
+
+    apache = Finding(
+        port=80,
+        service="Apache httpd",
+        version="2.4.49",
+        cves=[CVE("CVE-2021-41773", 9.8, 0.94, True, 97, "path traversal")],
+        rationale="on CISA KEV, EPSS 94%, composite 97",
+        remediation="upgrade Apache httpd to 2.4.62 or later",
+        remediation_command="sudo apt-get install --only-upgrade apache2",
+    )
+    apache.mitre = _map_mitre(apache.service, True)
+    openssh = Finding(
+        port=22,
+        service="OpenSSH",
+        version="9.3p1",
+        cves=[CVE("CVE-2023-38408", 9.8, 0.64, False, 62, "ssh-agent PKCS#11")],
+        rationale="EPSS 64%, CVSS 9.8, composite 62",
+        remediation="upgrade OpenSSH and enforce key-based authentication",
+        remediation_command="sudo apt-get install --only-upgrade openssh-server",
+    )
+    openssh.mitre = _map_mitre(openssh.service, True)
+    return {80: apache, 22: openssh}
+
+
+def _kev_mix_model_data(ssh_rationale: str, narrative: str) -> dict:
+    return {
+        "host": "10.0.0.9",
+        "host_risk_score": 85,
+        "summary": "Internet-facing Apache with a KEV path traversal flaw.",
+        "findings": [
+            {
+                "port": 80,
+                "priority": 1,
+                "contextual_severity": "critical",
+                "rationale": "CVE-2021-41773 is on CISA KEV with composite 97.",
+                "remediation": "Patch Apache httpd.",
+            },
+            {
+                "port": 22,
+                "priority": 2,
+                "contextual_severity": "high",
+                "rationale": ssh_rationale,
+                "remediation": "Upgrade OpenSSH.",
+            },
+        ],
+        "attack_path": {
+            "narrative": narrative,
+            "steps": [
+                {"finding_port": 80, "technique": "T1190", "tactic": "Initial Access"},
+                {
+                    "finding_port": 22,
+                    "technique": "T1021.004",
+                    "tactic": "Lateral Movement",
+                },
+            ],
+            "break_point": "Patch Apache httpd on port 80.",
+        },
+        "tool_calls": [],
+    }
+
+
+def test_merge_scrubs_false_kev_claim_from_rationale():
+    """A rationale calling a kev=False CVE 'KEV' is replaced with deterministic text."""
+    model_data = _kev_mix_model_data(
+        ssh_rationale="CVE-2023-38408 is on CISA KEV with composite 62.",
+        narrative="Attacker exploits Apache httpd on port 80 for initial access.",
+    )
+    result = _build_from_foundry(
+        model_data,
+        _kev_mix_det_by_port(),
+        naive_cvss_order=[],
+        tool_calls=[],
+        data_backend="cache",
+        host="10.0.0.9",
+    )
+    openssh = next(f for f in result.findings if f.port == 22)
+    assert "KEV" not in openssh.rationale
+    assert openssh.rationale == "EPSS 64%, CVSS 9.8, composite 62"
+
+
+def test_merge_keeps_true_kev_claim_in_rationale():
+    """A KEV claim about a CVE whose kev flag is true survives the merge."""
+    model_data = _kev_mix_model_data(
+        ssh_rationale="High EPSS and CVSS but not on KEV; composite 62.",
+        narrative="Attacker exploits Apache httpd on port 80 for initial access.",
+    )
+    result = _build_from_foundry(
+        model_data,
+        _kev_mix_det_by_port(),
+        naive_cvss_order=[],
+        tool_calls=[],
+        data_backend="cache",
+        host="10.0.0.9",
+    )
+    apache = next(f for f in result.findings if f.port == 80)
+    assert apache.rationale == "CVE-2021-41773 is on CISA KEV with composite 97."
+
+
+def test_merge_keeps_negated_kev_mention():
+    """'not on KEV' is a denial, not a claim, and must not trigger the scrub."""
+    model_data = _kev_mix_model_data(
+        ssh_rationale="CVE-2023-38408 is not on KEV; composite 62.",
+        narrative="Attacker exploits Apache httpd on port 80 for initial access.",
+    )
+    result = _build_from_foundry(
+        model_data,
+        _kev_mix_det_by_port(),
+        naive_cvss_order=[],
+        tool_calls=[],
+        data_backend="cache",
+        host="10.0.0.9",
+    )
+    openssh = next(f for f in result.findings if f.port == 22)
+    assert openssh.rationale == "CVE-2023-38408 is not on KEV; composite 62."
+
+
+def test_merge_scrubs_false_kev_claim_from_attack_narrative():
+    """A narrative calling a kev=False CVE 'KEV' falls back to the deterministic path."""
+    model_data = _kev_mix_model_data(
+        ssh_rationale="High EPSS and CVSS; composite 62.",
+        narrative=(
+            "Attacker exploits CVE-2023-38408, an actively exploited KEV flaw "
+            "in OpenSSH, then pivots to Apache httpd."
+        ),
+    )
+    result = _build_from_foundry(
+        model_data,
+        _kev_mix_det_by_port(),
+        naive_cvss_order=[],
+        tool_calls=[],
+        data_backend="cache",
+        host="10.0.0.9",
+    )
+    assert result.attack_path is not None
+    assert "KEV" not in result.attack_path.narrative
+    assert "CVE-2023-38408" not in result.attack_path.narrative
+    # The deterministic path starts at the Apache (Initial Access) finding.
+    assert result.attack_path.steps[0].finding_port == 80
+
+
+def test_live_fixture_false_kev_rationales_are_scrubbed():
+    """The captured Phi-4 fixture calls two kev=False CVEs 'KEV'; the merge must fix both."""
+    from agent.agent import parse_foundry_response
+
+    fixtures = Path(__file__).parent / "fixtures"
+    raw = (fixtures / "foundry_exposed_raw.txt").read_text(encoding="utf-8")
+    model_data = parse_foundry_response(raw)
+    assert model_data is not None
+
+    det_by_port = {
+        80: Finding(
+            port=80,
+            service="Apache httpd",
+            version="2.4.49",
+            cves=[
+                CVE("CVE-2021-41773", 9.8, 0.94, True, 97, "path traversal"),
+                CVE("CVE-2021-42013", 9.8, 0.94, True, 97, "path traversal #2"),
+            ],
+            rationale="on CISA KEV, EPSS 94%, composite 97",
+        ),
+        443: Finding(
+            port=443,
+            service="OpenSSL",
+            version="1.0.1",
+            cves=[CVE("CVE-2014-0160", 7.5, 0.94, True, 90, "Heartbleed")],
+            rationale="on CISA KEV, EPSS 94%, composite 90",
+        ),
+        21: Finding(
+            port=21,
+            service="vsftpd",
+            version="2.3.4",
+            cves=[CVE("CVE-2011-2523", 9.8, 0.94, False, 77, "vsftpd backdoor")],
+            rationale="EPSS 94%, CVSS 9.8, composite 77",
+        ),
+        22: Finding(
+            port=22,
+            service="OpenSSH",
+            version="7.4",
+            cves=[CVE("CVE-2023-38408", 9.8, 0.64, False, 62, "ssh-agent PKCS#11")],
+            rationale="EPSS 64%, CVSS 9.8, composite 62",
+        ),
+    }
+    result = _build_from_foundry(
+        model_data,
+        det_by_port,
+        naive_cvss_order=[],
+        tool_calls=[],
+        data_backend="cache",
+        host="10.0.0.5",
+    )
+    for port in (21, 22):
+        finding = next(f for f in result.findings if f.port == port)
+        assert "KEV" not in finding.rationale, (
+            f"port {port} rationale still claims KEV: {finding.rationale!r}"
+        )
+    for port in (80, 443):
+        finding = next(f for f in result.findings if f.port == port)
+        assert "KEV" in finding.rationale, (
+            f"port {port} should keep its true KEV claim: {finding.rationale!r}"
+        )
