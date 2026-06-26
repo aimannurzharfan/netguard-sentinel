@@ -5,8 +5,6 @@
 
 # Dev-only / local tooling
 _local/
-CLAUDE.md
-.claude/
 .mcp.json
 
 # Node tooling. node_modules is ignored everywhere; only the repo-root
